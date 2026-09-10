@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://coinslotarcade.vercel.app/sitemap.xml
