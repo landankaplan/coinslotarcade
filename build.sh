@@ -56,6 +56,20 @@ node --check public/games-ext.js
 
 node patch.js
 
+# --- how-to-play data: one blurb + full instructions per game, checksum hard gate
+# (generated once and verified, so an exact match is expected) ---
+HOWTO_SUM=$(md5sum howto.js | awk '{print $1}')
+if [ "$HOWTO_SUM" != "71d5ef73e338cab3598788b927782023" ]; then
+  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected 71d5ef73e338cab3598788b927782023"
+  exit 1
+fi
+node --check howto.js
+cp howto.js public/howto.js
+echo "How-to-play data OK: $HOWTO_SUM"
+
+# --- how-to-play UI: adds the shared blurb + expandable panel to the console screen ---
+node howto-patch.js
+
 # --- cartridge art: appended after the base page ---
 cp pictures-data.js public/pictures-data.js
 cp pictures-edu.js public/pictures-edu.js
@@ -70,10 +84,11 @@ if [ "$(grep -c CSA_EDU_GAMES public/pictures.js)" != "1" ]; then
 fi
 node --check public/pictures.js
 
-printf '%s' '<script src="/pictures-data.js" defer></script><script src="/pictures-edu.js" defer></script><script src="/pictures.js" defer></script><script src="/polish.js" defer></script>' >> public/index.html
+printf '%s' '<script src="/howto.js" defer></script><script src="/pictures-data.js" defer></script><script src="/pictures-edu.js" defer></script><script src="/pictures.js" defer></script><script src="/polish.js" defer></script>' >> public/index.html
+grep -q 'howto.js' public/index.html
 grep -q 'pictures-data.js' public/index.html
 grep -q 'pictures-edu.js' public/index.html
 grep -q 'polish.js' public/index.html
 grep -q 'games-ext.js' public/index.html
-echo "Extras injected: games-ext.js (arcade + Education v2) + pictures-data.js + pictures-edu.js + pictures.js + polish.js"
+echo "Extras injected: games-ext.js (arcade + Education v2) + howto.js + pictures-data.js + pictures-edu.js + pictures.js + polish.js"
 echo "Build complete."
