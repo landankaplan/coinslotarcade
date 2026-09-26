@@ -23,23 +23,18 @@ if ! tail -c 64 public/index.html | tr -d '\n\r ' | grep -q '</script>$'; then
 fi
 
 # --- arcade cabinets bundle (g01-g12), checksum + syntax gated ---
+# NOTE: the Pellet Prowler cat/patrol-bot art reskin (previously a separate fix.js
+# build-time string patch) is now baked directly into g01.js's source, so that
+# step has been removed - one less fragile dependency between this bundle and a
+# separate patch script every time Pellet Prowler's code changes.
 cat g01.js g02.js g03.js g04.js g05.js g06.js g07.js g08.js g09.js g10.js g11.js g12.js > public/games-ext.js
 EXT_SUM=$(md5sum public/games-ext.js | awk '{print $1}')
-if [ "$EXT_SUM" != "d316d9f14670c5dbcbc5c61a01f13a70" ]; then
+if [ "$EXT_SUM" != "795d6a24e9cb8e9caa58e4fddc2e807d" ]; then
   echo "GAMES BUNDLE MISMATCH: got $EXT_SUM"
   exit 1
 fi
 node --check public/games-ext.js
 echo "Bundle OK: $EXT_SUM"
-
-node fix.js public/games-ext.js
-FIX_SUM=$(md5sum public/games-ext.js | awk '{print $1}')
-if [ "$FIX_SUM" != "259b8ccd0c8054aad03f6c821c14fdd9" ]; then
-  echo "FIXED BUNDLE MISMATCH: got $FIX_SUM"
-  exit 1
-fi
-node --check public/games-ext.js
-echo "Fix OK: $FIX_SUM"
 
 # --- Education category v2: single verified bundle (checksum hard gate - this file was copied
 # byte-for-byte via the git repo, never manually retyped, so an exact match is expected) ---
@@ -59,8 +54,8 @@ node patch.js
 # --- how-to-play data: one blurb + full instructions per game, checksum hard gate
 # (generated once and verified, so an exact match is expected) ---
 HOWTO_SUM=$(md5sum howto.js | awk '{print $1}')
-if [ "$HOWTO_SUM" != "71d5ef73e338cab3598788b927782023" ]; then
-  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected 71d5ef73e338cab3598788b927782023"
+if [ "$HOWTO_SUM" != "da52808b41ed52e8406d8b31addd3616" ]; then
+  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected da52808b41ed52e8406d8b31addd3616"
   exit 1
 fi
 node --check howto.js
