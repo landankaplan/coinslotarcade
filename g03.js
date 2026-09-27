@@ -143,12 +143,184 @@ a.opt('Difficulty',['Easy','Normal','Hard'],diff,function(i){diff=i;startGame();
 a.begin(startGame);
 })
 ;var E=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'],A=['♠','♥','♦','♣'],R='planet rocket bridge castle forest garden island jungle market meadow mirror monkey orange pencil pepper pillow puzzle rabbit ribbon saddle silver spider summer temple thunder tunnel turtle valley violin window winter wizard yellow zipper anchor breeze candle canyon carpet cherry circus clover copper cotton dragon engine falcon finger flower guitar hammer helmet hunter jacket kitten ladder lantern magnet marble muffin napkin needle orbit paddle parade pirate pocket potato pretzel quartz rainbow shadow signal sketch spirit statue sticker tablet ticket tomato trophy velvet walnut whistle wrench yogurt arcade battery blanket bonfire cabinet compass crystal diamond dolphin eleven feather fortune gadget glacier harvest kingdom machine mustard network octopus painter pumpkin rooster scooter sunrise textile unicorn village whisper harbor pebble comet cactus beacon cobweb jigsaw kettle lizard mosaic nectar oyster parrot quiver radish sapphire tangle umbrella voyage walrus yonder zenith bubble castle marbles'.split(' ')
-;function T(){var r,t,n=[];for(r=0;r<4;r++)for(t=1;t<=13;t++)n.push({r:t,s:r});return h(n)}function L(r,t,n,e,a,i,l){var f;if(!l)return p(r,t,n,e,a,6,o.violet),p(r,t+4,n+4,e-8,a-8,4,o.grid),void d(r,t+e/2,n+a/2,.2*Math.min(e,a),o.violet);f=1===i.s||2===i.s,p(r,t,n,e,a,6,'#f4f1ff'),x(r,E[i.r],t+8,n+12,Math.round(.24*a),f?'#d8434a':'#171233','left'),x(r,A[i.s],t+e/2,n+.62*a,Math.round(.42*a),f?'#d8434a':'#171233')}function C(r,t,n,o,a,i,l){var f,c,u;for(r.beginPath(),f=0;f<(l?2*a:a);f++)c=i+f*e/(l?2*a:a),u=l&&f%2?o*l:o,f?r.lineTo(t+Math.cos(c)*u,n+Math.sin(c)*u):r.moveTo(t+Math.cos(c)*u,n+Math.sin(c)*u);r.closePath()}w('golfCards',S,'Fairway Cards',o.green,'Clear the table by playing cards one rank above or below the card showing.','Click an open card to play it · click the pile to turn a card · arrows + Space work too',function(t){var n,e,a,i,l,f,c,u,h,s,d=46,v=64,w=t.canvas(400,470);function b(){var r,t=T();for(n=[],r=0;r<7;r++)n.push(t.splice(0,5));a=[t.pop()],e=t,l=0,h='',s=!1}
-function m(r){return a.length&&1===Math.abs(r.r-a[a.length-1].r)}function M(){var r=n.reduce(function(r,t){return r+t.length},0);if(!r)return s=!0,i+=100+20*e.length,f++,h='Table cleared!',t.burst(200,200,o.green,40),void t.later(b,1400);e.length||n.some(function(r){return r.length&&m(r[r.length-1])})||(s=!0,h='No plays left',t.later(function(){t.over(i,'Stuck with '+r+' cards left on the table. Score: '+i)},1200))}function k(r){var e=n[r];!s&&e&&e.length&&m(e[e.length-1])&&(a.push(e.pop()),i+=10+5*l,l++,t.burst(20+54*r+23,120,o.green,6),M())}function S(){!s&&e.length&&(a.push(e.pop()),l=0,M())}function E(s){var b,M,k;for(g(w,400,470),b=0;b<7;b++){for(k=n[b],M=0;M<k.length;M++)L(w,20+54*b,40+22*M,d,v,k[M],!0);M>0&&m(k[M-1])&&(w.strokeStyle=o.green,w.lineWidth=3,r.L(w,20+54*b,40+22*(M-1),d,v,6),w.stroke()),u&&b===c&&(w.strokeStyle=o.ink,w.lineWidth=3,r.L(w,16+54*b,36,54,160,8),w.stroke())}e.length?(L(w,64,340,d,v,null,!1),
-x(w,e.length,87,420,13,o.dim)):p(w,64,340,d,v,6,'rgba(255,255,255,.06)'),a.length&&L(w,200,340,d,v,a[a.length-1],!0),x(w,'DRAW',87,330,11,o.dim),x(w,'PLAY ON',223,330,11,o.dim),x(w,h||(l>1?'Run of '+l:''),320,372,16,o.yellow),t.fxStep(s),t.hud([['SCORE',y(i)],['TABLES',f],['RUN',l]])}t.pointer({down:function(r){var t,o,e;if(u=!1,r.y>330&&r.x>60&&r.x<130)S();else for(t=0;t<7;t++)(o=n[t]).length&&r.x>=20+54*t&&r.x<=20+54*t+d&&(e=40+22*(o.length-1),r.y>=e&&r.y<=e+v&&k(t))}}),t.press=function(r){u=!0,'ArrowLeft'===r||'a'===r?c=Math.max(0,c-1):'ArrowRight'===r||'d'===r?c=Math.min(6,c+1):' '===r||'Enter'===r||'ArrowUp'===r||'w'===r?k(c):'ArrowDown'!==r&&'s'!==r&&'x'!==r||S()},t.pad([['◀','ArrowLeft'],['▶','ArrowRight'],['Play','Space'],['Draw','ArrowDown']]),t.begin(function(){i=0,f=0,c=3,u=!1,b(),t.fx=[],t.frame(E)})}),
-w('twentyOne',S,'Twenty One',o.coral,'Beat the dealer to twenty-one without going over. Start with 500 chips.','Buttons or keys: 1-4 bet · Space deal · H hit · S stand · D double · C cash out',function(r){var t,n,e,a,i,l,f,c,u,s,y=r.canvas(400,480),v=[10,25,50,100];function w(r){var t=0,n=0;return r.forEach(function(r){t+=r.r>10?10:1===r.r?1:r.r,1===r.r&&n++}),n&&t+10<=21&&(t+=10),t}function b(){return t.length<20&&h(t=T().concat(T(),T(),T())),t.pop()}function m(){'bet'===f&&(i>a&&(i=v.filter(function(r){return r<=a}).pop()||a),a-=i,n=[b(),b()],e=[b(),b()],s=!1,f='play',c='Hit, stand or double?',21===w(n)&&(s=!0,f='dealer',u=.6,c='Blackjack!'))}function M(){var t=w(n),u=w(e),h=0;t>21?c='Bust. You lose '+i:!s||2===e.length&&21===u?u>21?(h=2*i,c='Dealer busts. You win '+i):t>u?(h=2*i,c='You win '+i):t===u?(h=i,c='Push'):c='Dealer wins. You lose '+i:(h=Math.floor(2.5*i),c='Blackjack pays 3 to 2'),(a+=h)>l&&(l=a),h>i&&r.burst(200,220,o.yellow,30),f='bet',a<10&&(f='over',r.later(function(){
-r.over(l,'Broke. Best stack: '+l+' chips. Score: '+l)},1400))}function k(){'play'===f&&(n.push(b()),w(n)>21?(f='dealer',u=.5):21===w(n)&&S())}function S(){'play'===f&&(f='dealer',u=.6)}function E(){'play'!==f||2!==n.length||a<i||(a-=i,i*=2,n.push(b()),f='dealer',u=.6)}function A(){'bet'===f&&(f='over',r.over(Math.max(l,a),'Cashed out with '+a+' chips. Score: '+Math.max(l,a)))}function R(r){'bet'===f&&v[r]<=a&&(i=v[r])}var C={bet:[['DEAL',200,400,110,o.green,m],['CASH OUT',320,400,110,o.orange,A]],play:[['HIT',70,400,90,o.green,k],['STAND',185,400,90,o.coral,S],['DOUBLE',300,400,90,o.yellow,E]]};function P(t){var h,m,k,S;for('dealer'===f&&(u-=t)<=0&&(w(n)>21||s?M():w(e)<17?(e.push(b()),u=.6):M()),g(y,400,480),x(y,'DEALER'+('play'===f?'':' '+w(e)),60,34,13,o.dim),m='play'===f,h=0;h<e.length;h++)L(y,40+46*h,50,56,78,e[h],!(m&&1===h));for(x(y,'YOU '+(n.length?w(n)+(k=0,S=0,n.forEach(function(r){k+=r.r>10?10:r.r,1===r.r&&S++}),S&&k+10<=21&&w(n)<21?' soft':''):''),60,176,13,o.dim),
-h=0;h<n.length;h++)L(y,40+46*h,192,56,78,n[h],!0);if(x(y,'CHIPS '+a,330,40,18,o.yellow),x(y,'BET '+i,330,66,16,o.ink),x(y,c,200,300,16,o.ink),'bet'===f)for(h=0;h<4;h++)d(y,65+90*h,350,20,v[h]<=a?i===v[h]?o.yellow:o.violet:o.grid),x(y,v[h],65+90*h,350,13,v[h]<=a?o.bg:o.dim);(C[f]||[]).forEach(function(r){var t='DOUBLE'!==r[0]||2===n.length&&a>=i;p(y,r[1]-r[3]/2,r[2]-20,r[3],40,10,t?r[4]:o.grid),x(y,r[0],r[1],r[2],15,t?o.bg:o.dim)}),r.fxStep(t),r.hud([['CHIPS',a],['BEST',l]])}r.pointer({down:function(r){var t;if(r.y>330&&r.y<372&&'bet'===f)for(t=0;t<4;t++)Math.abs(r.x-(65+90*t))<40&&R(t);else(C[f]||[]).forEach(function(t){Math.abs(r.x-t[1])<t[3]/2&&Math.abs(r.y-t[2])<22&&t[5]()})}}),r.press=function(r){r>='1'&&r<='4'&&1===r.length?R(+r-1):' '===r||'Enter'===r?m():'h'===r?k():'s'===r?S():'d'===r?E():'c'===r&&A()},r.pad([['Deal','Space'],['Hit','h'],['Stand','s'],['Double','d']]),r.begin(function(){a=500,i=25,l=500,f='bet',c='Place your bet',n=[],e=[],u=0,t=[],r.fx=[],r.frame(P)})}),
-w('higherLower',S,'Higher Lower',o.violet,'Will the next card be higher or lower? Build a streak. Ace is low.','Up / H for higher · Down / L for lower · three wrong guesses ends it',function(r){var t,n,e,a,i,l,f,c,u,h,s=400,d=r.canvas(s,470);function v(s){var y;f>0||(t.length||(t=T(),l+=50),y=t.pop(),e.push(n),e.length>7&&e.shift(),y.r===n.r?(c='Same rank. Push.',u=o.dim):y.r>n.r===s?(i++,l+=10*Math.min(i,10),c='Correct! Streak '+i,u=o.green,r.burst(200,200,o.green,16)):(a--,i=0,c='Wrong.',u=o.coral,r.burst(200,200,o.coral,16)),n=y,f=.55,h=.3,a<=0&&(f=99,r.later(function(){r.over(l,'Out of lives. Score: '+l)},900)))}function w(v){var w,b,m=function(){var r=0,o=0,e=0;return t.forEach(function(t){t.r>n.r?r++:t.r<n.r?o++:e++}),[r,o,e]}();for(f>0&&f<50&&(f-=v),h>0&&(h-=v),g(d,s,470),x(d,'LIVES '+'♥ '.repeat(a),200,30,16,o.coral),w=0;w<e.length;w++)L(d,24+50*w,56,40,56,e[w],!0);L(d,200-60*(b=h>0?1-h/.3:1),150,120*b,168,n,b>.5),x(d,c,200,335,16,u),p(d,30,355,165,44,10,o.green),
-x(d,'HIGHER ('+m[0]+')',112,377,15,o.bg),p(d,205,355,165,44,10,o.coral),x(d,'LOWER ('+m[1]+')',287,377,15,o.bg),x(d,'Same rank left: '+m[2]+' · Cards left: '+t.length,200,425,12,o.dim),r.fxStep(v),r.hud([['SCORE',y(l)],['STREAK',i]])}r.pointer({down:function(r){r.y>340&&r.y<400&&(r.x<200?v(!0):v(!1))}}),r.press=function(r){'ArrowUp'===r||'h'===r||'w'===r?v(!0):'ArrowDown'!==r&&'l'!==r&&'s'!==r||v(!1)},r.pad([['Higher','ArrowUp'],['Lower','ArrowDown']]),r.begin(function(){t=T(),n=t.pop(),e=[],a=3,i=0,l=0,f=0,c='Higher or lower?',u=o.ink,h=0,r.fx=[],r.frame(w)})}),w('hangWord',S,'Word Fuse',o.orange,'Guess the hidden word letter by letter before the fuse burns down.','Type letters or tap the keys · six wrong guesses and the bomb goes off',function(r){var t,n,e,a,i,l,f,c,h,s=r.canvas(400,470),w=['qwertyuiop','asdfghjkl','zxcvbnm'];function b(){t=function(){var r;do{r=u(R)}while(r.length<5||r.length>9);return r}(),n={},e=0,h={},l=!1,f='',c=0}function m(u){
-l||h[u]||1!==u.length||u<'a'||u>'z'||(h[u]=1,t.indexOf(u)>-1?(n[u]=1,r.burst(60+280*Math.random(),215,o.green,6),function(){var r;for(r=0;r<t.length;r++)if(!n[t.charAt(r)])return!1;return!0}()&&(l=!0,a+=10*t.length+10*(6-e),i++,f='Defused! '+t.toUpperCase(),r.later(b,1300))):(e++,r.burst(200,100,o.coral,8),e>=6&&(l=!0,c=1,f='The word was '+t.toUpperCase(),r.later(function(){r.over(a,'Boom. '+i+' word'+(1===i?'':'s')+' defused. Score: '+a)},1500))))}function M(l){var u,b,m,M,k,S;if(c>0&&(c-=.5*l),g(s,400,470),e<6)d(s,130,100,44,'#0b0518'),s.strokeStyle=o.dim,s.lineWidth=3,s.stroke(),d(s,116,86,8,'rgba(255,255,255,.15)'),p(s,120,48,20,12,3,o.dim),130+0*(k=e/6),s.beginPath(),s.moveTo(130,48),s.quadraticCurveTo(190,20,250-120*k,40+12*k),s.strokeStyle=o.orange,s.lineWidth=4,s.stroke(),s.beginPath(),s.moveTo(250-120*k,40+12*k),s.quadraticCurveTo(255,40,260,44),s.strokeStyle='rgba(255,255,255,.12)',s.lineWidth=4,s.stroke(),d(s,250-120*k,40+12*k,7+2*Math.sin(performance.now()/60),o.yellow),
+;function T(){var r,t,n=[];for(r=0;r<4;r++)for(t=1;t<=13;t++)n.push({r:t,s:r});return h(n)}function L(r,t,n,e,a,i,l){var f;if(!l)return p(r,t,n,e,a,6,o.violet),p(r,t+4,n+4,e-8,a-8,4,o.grid),void d(r,t+e/2,n+a/2,.2*Math.min(e,a),o.violet);f=1===i.s||2===i.s,p(r,t,n,e,a,6,'#f4f1ff'),x(r,E[i.r],t+8,n+12,Math.round(.24*a),f?'#d8434a':'#171233','left'),x(r,A[i.s],t+e/2,n+.62*a,Math.round(.42*a),f?'#d8434a':'#171233')}function C(r,t,n,o,a,i,l){var f,c,u;for(r.beginPath(),f=0;f<(l?2*a:a);f++)c=i+f*e/(l?2*a:a),u=l&&f%2?o*l:o,f?r.lineTo(t+Math.cos(c)*u,n+Math.sin(c)*u):r.moveTo(t+Math.cos(c)*u,n+Math.sin(c)*u);r.closePath()}w('golfCards',S,'Fairway Cards',o.green,'Play all nine holes of Golf: clear each layout by stacking cards one rank above or below the pile. Lowest total strokes wins the round.','Click a top card to play it onto the pile, click the stock to turn a card · arrows + Space work too · H for a hint, U to undo',function(t){
+var ctx=t.canvas(400,470),cw=46,ch=64;
+var cols,stock,waste,runLen,hole,score,strokes,msg,holeOver,hist,selCol,keyNav,hintCol,hintT;
+function golfValue(rank){return 13===rank?0:1===rank?1:rank>=10?10:rank}
+function canPlay(card){return waste.length&&1===Math.abs(card.r-waste[waste.length-1].r)}
+function snapshot(){hist.push({cols:cols.map(function(cc){return cc.slice()}),waste:waste.slice(),stock:stock.slice(),runLen:runLen,score:score,msg:msg});if(hist.length>40)hist.shift()}
+function undo(){if(holeOver||!hist.length)return;var snap=hist.pop();cols=snap.cols;waste=snap.waste;stock=snap.stock;runLen=snap.runLen;score=snap.score;msg=snap.msg}
+function dealHole(){var deck=T();cols=[];for(var i=0;i<7;i++)cols.push(deck.splice(0,5));waste=[deck.pop()];stock=deck;runLen=0;msg='';holeOver=false;hist=[];hintCol=-1;hintT=0}
+function anyPlay(){for(var i=0;i<7;i++){var col=cols[i];if(col.length&&canPlay(col[col.length-1]))return true}return false}
+function endHole(cleared){holeOver=true;var holeStrokes=0;cols.forEach(function(colArr){colArr.forEach(function(card){holeStrokes+=golfValue(card.r)})});strokes+=holeStrokes;if(cleared){score+=100+10*stock.length;msg='Hole cleared! +'+holeStrokes+' strokes';t.burst(200,200,o.green,40)}else{msg='No plays left · +'+holeStrokes+' strokes';t.burst(200,200,o.coral,16)}
+t.later(function(){if(hole>=9)t.over(score,hole+' holes complete — '+strokes+' total strokes. Arcade score '+score,'Round Complete');else{hole++;dealHole()}},1300)}
+function checkEnd(){if(!cols.some(function(colArr){return colArr.length}))return void endHole(true);if(!stock.length&&!anyPlay())endHole(false)}
+function playCol(i){if(holeOver)return;var col=cols[i];if(!col.length)return;var card=col[col.length-1];if(!canPlay(card))return;snapshot();col.pop();waste.push(card);score+=10+5*runLen;runLen++;t.burst(20+54*i+23,120,o.green,8);checkEnd()}
+function drawStock(){if(holeOver||!stock.length)return;snapshot();waste.push(stock.pop());runLen=0;checkEnd()}
+function giveHint(){if(holeOver)return;for(var i=0;i<7;i++){var col=cols[i];if(col.length&&canPlay(col[col.length-1])){hintCol=i;hintT=1.1;return}}if(stock.length){msg='Draw the stock';t.later(function(){if(!holeOver)msg=''},900)}}
+function render(dt){
+if(hintT>0)hintT-=dt;
+g(ctx,400,470,o.bg);
+x(ctx,'HOLE '+hole+'/9',20,16,13,o.dim,'left');
+x(ctx,'STROKES '+strokes,380,16,13,o.dim,'right');
+for(var b=0;b<7;b++){
+var col=cols[b];
+for(var m=0;m<col.length;m++)L(ctx,20+54*b,40+22*m,cw,ch,col[m],true);
+if(col.length&&canPlay(col[col.length-1])){ctx.strokeStyle=o.green;ctx.lineWidth=3;ctx.strokeRect(20+54*b+1,40+22*(col.length-1)+1,cw-2,ch-2)}
+if(hintCol===b&&hintT>0&&col.length){ctx.strokeStyle=o.yellow;ctx.lineWidth=3;ctx.strokeRect(20+54*b-2,40+22*(col.length-1)-2,cw+4,ch+4)}
+if(keyNav&&b===selCol){ctx.strokeStyle=o.ink;ctx.lineWidth=3;ctx.strokeRect(18+54*b,36,50,160)}
+}
+if(stock.length){L(ctx,64,340,cw,ch,null,false);x(ctx,stock.length,87,420,13,o.dim)}else p(ctx,64,340,cw,ch,6,'rgba(255,255,255,.06)');
+if(waste.length)L(ctx,200,340,cw,ch,waste[waste.length-1],true);
+x(ctx,'STOCK',87,330,11,o.dim);
+x(ctx,'PLAY ON',223,330,11,o.dim);
+p(ctx,300,332,80,34,10,o.violet);x(ctx,'HINT (H)',340,349,12,o.bg);
+p(ctx,300,372,80,34,10,o.blue);x(ctx,'UNDO (U)',340,389,12,o.bg);
+x(ctx,runLen>1?'Run of '+runLen:'',150,412,15,o.yellow);
+x(ctx,msg,150,452,14,o.ink);
+t.fxStep(dt);
+t.hud([['HOLE',hole+'/9'],['SCORE',y(score)],['STROKES',strokes]]);
+}
+t.pointer({down:function(pt){
+keyNav=false;
+if(pt.x>300&&pt.x<380&&pt.y>332&&pt.y<366)return giveHint();
+if(pt.x>300&&pt.x<380&&pt.y>372&&pt.y<406)return undo();
+if(pt.y>330&&pt.y<410&&pt.x>55&&pt.x<140)return drawStock();
+for(var i=0;i<7;i++){var col=cols[i];if(col.length){var topY=40+22*(col.length-1);if(pt.x>=20+54*i&&pt.x<=20+54*i+cw&&pt.y>=topY&&pt.y<=topY+ch)playCol(i)}}
+}});
+t.press=function(k){
+keyNav=true;
+if('ArrowLeft'===k||'a'===k)selCol=Math.max(0,selCol-1);
+else if('ArrowRight'===k||'d'===k)selCol=Math.min(6,selCol+1);
+else if(' '===k||'Enter'===k||'ArrowUp'===k||'w'===k)playCol(selCol);
+else if('ArrowDown'===k||'s'===k||'x'===k)drawStock();
+else if('h'===k)giveHint();
+else if('u'===k)undo();
+};
+t.pad([['◀','ArrowLeft'],['▶','ArrowRight'],['Play','Space'],['Draw','ArrowDown'],['Hint','h'],['Undo','u']]);
+t.begin(function(){hole=1;score=0;strokes=0;selCol=3;keyNav=false;dealHole();t.fx=[];t.frame(render)});
+}),
+w('twentyOne',S,'Twenty One',o.coral,'Beat the dealer to twenty-one from a real four-deck shoe. Split pairs, double down, and start with 500 chips.','Tap chips or 1-5 to bet · Space deal · H hit · S stand · D double · P split · C cash out',function(r){
+var ctx=r.canvas(400,480),chipVals=[10,25,50,100,250];
+var shoe,playerHands,dealerHand,activeHand,chips,bet,best,phase,message,dealerTimer;
+function draw(){if(!shoe.length)shoe=h(T().concat(T(),T(),T(),T()));return shoe.pop()}
+function handTotal(cards){var total=0,aces=0;cards.forEach(function(card){total+=card.r>10?10:card.r;if(1===card.r)aces++});while(aces>0&&total+10<=21){total+=10;aces--}return total}
+function rawTotal(cards){var total=0;cards.forEach(function(card){total+=card.r>10?10:card.r});return total}
+function isSoft(cards){return handTotal(cards)!==rawTotal(cards)}
+function currentHand(){return playerHands[activeHand]}
+function advanceHand(){while(activeHand<playerHands.length&&playerHands[activeHand].done)activeHand++;if(activeHand>=playerHands.length){phase='dealer';dealerTimer=.6;message='Dealer plays...'}else message='Hit, stand, double or split?'}
+function startRound(){if('bet'!==phase)return;if(chips<10)return;if(bet>chips)bet=chipVals.filter(function(v2){return v2<=chips}).pop()||chips;if(shoe.length<52)shoe=h(T().concat(T(),T(),T(),T()));chips-=bet;playerHands=[{cards:[draw(),draw()],bet:bet,doubled:false,done:false,isSplit:false,bust:false,blackjack:false}];dealerHand=[draw(),draw()];activeHand=0;phase='play';message='Hit, stand, double or split?';dealerTimer=0;var hnd=playerHands[0];if(21===handTotal(hnd.cards)){hnd.done=true;hnd.blackjack=true;advanceHand()}}
+function hit(){if('play'!==phase)return;var hnd=currentHand();if(!hnd||hnd.done)return;hnd.cards.push(draw());var total=handTotal(hnd.cards);if(total>21){hnd.done=true;hnd.bust=true;advanceHand()}else if(21===total){hnd.done=true;advanceHand()}}
+function stand(){if('play'!==phase)return;var hnd=currentHand();if(!hnd||hnd.done)return;hnd.done=true;advanceHand()}
+function doubleDown(){if('play'!==phase)return;var hnd=currentHand();if(!hnd||hnd.done||2!==hnd.cards.length||chips<hnd.bet)return;chips-=hnd.bet;hnd.bet*=2;hnd.doubled=true;hnd.cards.push(draw());hnd.done=true;if(handTotal(hnd.cards)>21)hnd.bust=true;advanceHand()}
+function canSplit(hnd){return hnd&&!hnd.done&&2===hnd.cards.length&&hnd.cards[0].r===hnd.cards[1].r&&chips>=hnd.bet&&playerHands.length<4}
+function split(){if('play'!==phase)return;var hnd=currentHand();if(!canSplit(hnd))return;chips-=hnd.bet;var wasAce=1===hnd.cards[0].r;var second={cards:[hnd.cards.pop()],bet:hnd.bet,doubled:false,done:false,isSplit:true,bust:false,blackjack:false};hnd.isSplit=true;hnd.cards.push(draw());second.cards.push(draw());playerHands.splice(activeHand+1,0,second);if(wasAce){hnd.done=true;second.done=true;advanceHand()}else if(21===handTotal(hnd.cards)){hnd.done=true;advanceHand()}}
+function cashOut(){if('bet'!==phase)return;var final=Math.max(best,chips);phase='over';r.over(final,'Cashed out with '+chips+' chips. Score: '+final)}
+function setBet(idx){if('bet'!==phase)return;if(chipVals[idx]<=chips)bet=chipVals[idx]}
+function resolveShowdown(){var dealerTotal=handTotal(dealerHand),dealerBust=dealerTotal>21,msgs=[],won=false;playerHands.forEach(function(hnd,idx){var total=handTotal(hnd.cards),payout=0,label;if(hnd.bust){label='Bust'}else if(hnd.blackjack&&!hnd.isSplit){payout=Math.floor(2.5*hnd.bet);label='Blackjack +'+payout;won=true}else if(dealerBust){payout=2*hnd.bet;label='Dealer busts +'+payout;won=true}else if(total>dealerTotal){payout=2*hnd.bet;label='Win +'+payout;won=true}else if(total===dealerTotal){payout=hnd.bet;label='Push'}else label='Lose';chips+=payout;msgs.push((playerHands.length>1?'H'+(idx+1)+': ':'')+label)});if(chips>best)best=chips;message=msgs.join(' · ');if(won)r.burst(200,230,o.yellow,30);phase='bet';if(chips<10){phase='over';r.later(function(){r.over(best,'Broke. Best stack: '+best+' chips. Score: '+best)},1400)}}
+function render(dt){
+if('dealer'===phase){dealerTimer-=dt;if(dealerTimer<=0){var allBust=playerHands.every(function(hnd){return hnd.bust});if(allBust)resolveShowdown();else if(handTotal(dealerHand)<17){dealerHand.push(draw());dealerTimer=.6}else resolveShowdown()}}
+g(ctx,400,480,o.bg);
+var dealerShown='play'===phase;
+x(ctx,'DEALER'+(dealerShown?'':' '+handTotal(dealerHand)),60,34,13,o.dim);
+for(var i=0;i<dealerHand.length;i++)L(ctx,40+46*i,50,56,78,dealerHand[i],!(dealerShown&&1===i));
+var numHands=playerHands.length,cardW=numHands>1?34:56,cardH=numHands>1?50:78,step=numHands>1?20:46,handGap=numHands>1?92:0;
+for(var hIdx=0;hIdx<numHands;hIdx++){
+var hnd=playerHands[hIdx],baseX=20+hIdx*handGap,baseY=192,total=handTotal(hnd.cards);
+for(var j=0;j<hnd.cards.length;j++)L(ctx,baseX+step*j,baseY,cardW,cardH,hnd.cards[j],true);
+var label=hnd.bust?'BUST':hnd.blackjack&&!hnd.isSplit?'BLACKJACK':(total+(isSoft(hnd.cards)&&total<21?' soft':''));
+x(ctx,(numHands>1?'H'+(hIdx+1)+' ':'')+label,baseX+cardW/2+step*(hnd.cards.length-1)/2,baseY-14,12,hnd.bust?o.coral:o.dim);
+if('play'===phase&&hIdx===activeHand){ctx.strokeStyle=o.yellow;ctx.lineWidth=3;ctx.strokeRect(baseX-4,baseY-4,cardW+step*(hnd.cards.length-1)+8,cardH+8)}
+x(ctx,'BET '+hnd.bet,baseX+cardW/2+step*(hnd.cards.length-1)/2,baseY+cardH+16,11,o.dim);
+}
+x(ctx,'CHIPS '+chips,330,40,18,o.yellow);
+x(ctx,'BET '+bet,330,66,16,o.ink);
+x(ctx,'SHOE '+shoe.length,330,88,11,o.dim);
+x(ctx,message,200,300,15,o.ink);
+if('bet'===phase){
+for(var b=0;b<chipVals.length;b++){var cx=45+62*b,ok=chipVals[b]<=chips;d(ctx,cx,350,18,ok?bet===chipVals[b]?o.yellow:o.violet:o.grid);x(ctx,chipVals[b],cx,350,11,ok?o.bg:o.dim)}
+p(ctx,200-55,380,110,38,10,chips>=10?o.green:o.grid);x(ctx,'DEAL',200,399,15,chips>=10?o.bg:o.dim);
+p(ctx,320-55,380,110,38,10,o.orange);x(ctx,'CASH OUT',320,399,14,o.bg);
+}else if('play'===phase){
+var hnd=currentHand(),canDbl=hnd&&2===hnd.cards.length&&chips>=hnd.bet,canSpl=canSplit(hnd);
+var btns=[['HIT',55,420,80,o.green,true],['STAND',150,420,80,o.coral,true],['DOUBLE',245,420,90,o.yellow,canDbl],['SPLIT',340,420,80,o.violet,canSpl]];
+btns.forEach(function(bt){p(ctx,bt[1]-bt[3]/2,bt[2]-19,bt[3],38,10,bt[5]?bt[4]:o.grid);x(ctx,bt[0],bt[1],bt[2],13,bt[5]?o.bg:o.dim)});
+}
+r.fxStep(dt);
+r.hud([['CHIPS',chips],['BET',bet],['BEST',best]]);
+}
+r.pointer({down:function(pt){
+if('bet'===phase){
+if(pt.y>335&&pt.y<365)for(var b=0;b<chipVals.length;b++)if(Math.abs(pt.x-(45+62*b))<24)setBet(b);
+if(pt.x>145&&pt.x<255&&pt.y>380&&pt.y<418)startRound();
+if(pt.x>265&&pt.x<375&&pt.y>380&&pt.y<418)cashOut();
+}else if('play'===phase){
+if(pt.y>401&&pt.y<439){
+if(pt.x>15&&pt.x<95)hit();
+else if(pt.x>110&&pt.x<190)stand();
+else if(pt.x>200&&pt.x<290)doubleDown();
+else if(pt.x>300&&pt.x<380)split();
+}
+}
+}});
+r.press=function(k){
+if(k>='1'&&k<='5'&&1===k.length)setBet(+k-1);
+else if(' '===k||'Enter'===k)startRound();
+else if('h'===k)hit();
+else if('s'===k)stand();
+else if('d'===k)doubleDown();
+else if('p'===k)split();
+else if('c'===k)cashOut();
+};
+r.pad([['Deal','Space'],['Hit','h'],['Stand','s'],['Double','d'],['Split','p']]);
+r.begin(function(){chips=500;bet=25;best=500;phase='bet';message='Place your bet';playerHands=[];dealerHand=[];activeHand=0;dealerTimer=0;shoe=h(T().concat(T(),T(),T(),T()));r.fx=[];r.frame(render)});
+}),
+w('higherLower',S,'Higher Lower',o.violet,'Guess higher or lower to build a streak multiplier, then bank your points before a wrong guess wipes the pot. Ace is low.','Up / H for higher · Down / L for lower · B to bank your streak · three wrong guesses ends it',function(r){
+var W=400,ctx=r.canvas(W,470);
+var deck,current,history,lives,streak,score,pot,message,msgColor,lockT,flipT;
+function multiplier(streakVal){return Math.min(5,1+Math.floor((streakVal-1)/3))}
+function bank(){if(lockT>0||pot<=0)return;score+=pot;message='Banked '+pot+' points!';msgColor=o.yellow;r.burst(200,160,o.yellow,24);pot=0;streak=0}
+function guess(wantHigher){if(lockT>0)return;if(!deck.length){deck=T();score+=50;r.burst(200,120,o.teal,20)}var next=deck.pop();history.push(current);if(history.length>7)history.shift();if(next.r===current.r){message='Same rank. Push.';msgColor=o.dim}else if(next.r>current.r===wantHigher){streak++;var mult=multiplier(streak);pot+=10*mult;message='Correct! Streak '+streak+' · x'+mult;msgColor=o.green;r.burst(200,200,o.green,16)}else{lives--;pot=0;streak=0;message='Wrong! Pot lost.';msgColor=o.coral;r.burst(200,200,o.coral,16)}current=next;lockT=.55;flipT=.3;if(lives<=0){lockT=99;r.later(function(){r.over(score,'Out of lives. Final score: '+score)},900)}}
+function render(dt){
+var counts=function(){var higherN=0,lowerN=0,sameN=0;deck.forEach(function(card){card.r>current.r?higherN++:card.r<current.r?lowerN++:sameN++});return[higherN,lowerN,sameN]}();
+if(lockT>0&&lockT<50)lockT-=dt;
+if(flipT>0)flipT-=dt;
+g(ctx,W,470,o.bg);
+x(ctx,'LIVES '+'♥ '.repeat(lives),200,26,16,o.coral);
+x(ctx,'DECK '+deck.length+' cards left',200,46,11,o.dim);
+for(var i=0;i<history.length;i++)L(ctx,24+50*i,60,40,56,history[i],true);
+var flipProgress=flipT>0?1-flipT/.3:1;
+L(ctx,200-60*flipProgress,150,120*flipProgress,168,current,flipProgress>.5);
+x(ctx,message,200,335,16,msgColor);
+p(ctx,30,355,165,44,10,o.green);
+x(ctx,'HIGHER ('+counts[0]+')',112,377,15,o.bg);
+p(ctx,205,355,165,44,10,o.coral);
+x(ctx,'LOWER ('+counts[1]+')',287,377,15,o.bg);
+p(ctx,140,408,120,34,10,pot>0?o.yellow:o.grid);
+x(ctx,pot>0?'BANK '+pot:'BANK',200,425,14,pot>0?o.bg:o.dim);
+x(ctx,'Same rank left: '+counts[2],200,452,11,o.dim);
+r.fxStep(dt);
+r.hud([['SCORE',y(score)],['STREAK',streak],['POT',pot]]);
+}
+r.pointer({down:function(pt){
+if(pt.y>355&&pt.y<399){if(pt.x<200)guess(true);else guess(false)}
+else if(pt.y>408&&pt.y<442&&pt.x>140&&pt.x<260)bank();
+}});
+r.press=function(k){
+if('ArrowUp'===k||'h'===k||'w'===k)guess(true);
+else if('ArrowDown'===k||'l'===k||'s'===k)guess(false);
+else if('b'===k)bank();
+};
+r.pad([['Higher','ArrowUp'],['Lower','ArrowDown'],['Bank','b']]);
+r.begin(function(){deck=T();current=deck.pop();history=[];lives=3;streak=0;score=0;pot=0;message='Higher or lower?';msgColor=o.ink;lockT=0;flipT=0;r.fx=[];r.frame(render)});
+}),w('hangWord',S,'Word Fuse',o.orange,'Guess the hidden word before the fuse burns out or the clock runs down. Difficulty climbs as you defuse more words.','Type letters or tap the keys · Space for a hint (costs a strike) · six wrong guesses or an empty clock ends it',function(r){
+var ctx=r.canvas(400,470),rows=['qwertyuiop','asdfghjkl','zxcvbnm'];
+var LETTER_FREQ={a:8.2,b:1.5,c:2.8,d:4.3,e:12.7,f:2.2,g:2,h:6.1,i:7,j:.15,k:.77,l:4,m:2.4,n:6.7,o:7.5,p:1.9,q:.1,r:6,s:6.3,t:9.1,u:2.8,v:1,w:2.4,x:.15,y:2,z:.07};
+var TIERS=[[5,6],[7,7],[8,9]],TIER_NAMES=['EASY','MEDIUM','HARD'];
+var word,guessed,wrongCount,score,defused,ended,boom,message,feedback,timeLeft,totalTime,hintsUsed,tier;
+function letterNote(ch){var freq=LETTER_FREQ[ch]||0;return freq>=6?'common':freq>=2?'moderate':'rare'}
+function tierFor(){return Math.min(2,Math.floor(defused/3))}
+function wordPool(t){var range=TIERS[t],pool=R.filter(function(wd){return wd.length>=range[0]&&wd.length<=range[1]});return pool.length?pool:R.filter(function(wd){return wd.length>=5&&wd.length<=9})}
+function isComplete(){for(var i=0;i<word.length;i++)if(!guessed[word.charAt(i)])return false;return true}
+function newWord(){tier=tierFor();word=u(wordPool(tier));guessed={};wrongCount=0;message='';feedback='';ended=false;hintsUsed=0;totalTime=30+3*word.length;timeLeft=totalTime}
+function explode(){if(ended)return;ended=true;boom=1;message='The w

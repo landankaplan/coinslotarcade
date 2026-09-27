@@ -583,6 +583,139 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     newLevel();
     r.frame(step);
   });
-}),w('fruitSlash',m,'Fruit Slash',o.green,'Drag across the fruit to slice it. Bombs are not fruit.','Drag / swipe across fruit · avoid the bombs · miss 3 and it is over',function(r){var t,n,a,i,l,h,p,x,w,b,m=420,M=r.canvas(400,m),k=[o.coral,o.orange,o.green,o.magenta,o.yellow];function S(){var r=c(60,340),n=Math.random()<Math.min(.24,.05+5e-4*l);t.push({x:r,y:440,vx:(200-r)*c(.25,.6)+c(-30,30),vy:-c(560,700),r:n?17:22,bomb:n,col:u(k)})}function E(e){var a,u;if((h-=e)<=0){for(u=1+f(2+Math.floor(l/300)),a=0;a<u;a++)S();h=c(.8,1.5)/(1+l/500)}for(a=t.length-1;a>=0;a--)t[a].vy+=720*e,t[a].x+=t[a].vx*e,t[a].y+=t[a].vy*e,t[a].y>460&&t[a].vy>0&&(t[a].bomb||(i--,r.burst(t[a].x,410,o.coral,6)),t.splice(a,1));for(a=n.length-1;a>=0;a--)n[a].vy+=720*e,n[a].x+=n[a].vx*e,n[a].y+=n[a].vy*e,n[a].a+=n[a].va*e,n[a].y>460&&n.splice(a,1);if(i<=0)return A(e),
-void r.over(l,'Too many got away. Score: '+l);A(e)}function A(f){var c;for(g(M,400,m),b>0&&(M.fillStyle='rgba(255,107,74,'+.4*b+')',M.fillRect(0,0,400,m),b-=2*f),t.forEach(function(r){r.bomb?(d(M,r.x,r.y,r.r,'#0b0518'),M.strokeStyle=o.dim,M.lineWidth=2,M.stroke(),v(M,r.x+6,r.y-14,r.x+12,r.y-22,o.orange,3),d(M,r.x+12,r.y-23,3,o.yellow)):(d(M,r.x,r.y,r.r,r.col),d(M,r.x-7,r.y-7,5,'rgba(255,255,255,.35)'),v(M,r.x,r.y-r.r,r.x+4,r.y-r.r-8,o.green,3))}),n.forEach(function(r){M.save(),M.translate(r.x,r.y),M.rotate(r.a),M.beginPath(),M.arc(0,0,22,r.s?0:Math.PI,r.s?Math.PI:e),M.closePath(),M.fillStyle=r.col,M.fill(),M.beginPath(),M.arc(0,0,15,r.s?0:Math.PI,r.s?Math.PI:e),M.closePath(),M.fillStyle=o.ink,M.fill(),M.restore()}),c=1;c<a.length;c++)v(M,a[c-1].x,a[c-1].y,a[c].x,a[c].y,'rgba(233,251,249,'+c/a.length+')',2+.6*c);r.fxStep(f),r.hud([['SCORE',y(l)],['MISSES',3-i+'/3'],['COMBO',w]])}r.pointer({down:function(r){p=!0,x=r,a=[r],w=0},move:function(e){p&&(!function(e,a){
-var i,f,c,u=a.x-e.x,h=a.y-e.y,y=u*u+h*h||1;for(i=t.length-1;i>=0;i--)if(c=s((((f=t[i]).x-e.x)*u+(f.y-e.y)*h)/y,0,1),Math.hypot(f.x-(e.x+u*c),f.y-(e.y+h*c))<f.r){if(t.splice(i,1),f.bomb)return r.burst(f.x,f.y,o.coral,30),b=1,A(.016),void r.over(l,'You sliced a bomb! Score: '+l);l+=10,w++,r.burst(f.x,f.y,f.col,14),n.push({x:f.x,y:f.y,vx:f.vx-60,vy:.4*f.vy,a:0,va:-3,col:f.col,s:0},{x:f.x,y:f.y,vx:f.vx+60,vy:.4*f.vy,a:0,va:3,col:f.col,s:1})}}(x,e),x=e,a.push(e),a.length>9&&a.shift())},up:function(){p=!1,a=[],w>=3&&(l+=5*w,r.burst(200,200,o.yellow,20)),w=0}}),r.begin(function(){t=[],n=[],a=[],i=3,l=0,h=.5,p=!1,x=null,w=0,b=0,r.fx=[],r.frame(E)})}),w('towerStack',m,'Tower Stack',o.blue,'Time each tap to drop the sliding block squarely on the tower.','Tap / click / Space to drop the block',function(r){var t,n,e,a,i,l,c,u,h,s=320,y=480,d=22,v=r.canvas(s,y);function w(){var r=t[t.length-1];e=t.length%2?1:-1,n={x:e>0?.6*-r.w:s-.4*r.w,w:r.w,i:t.length},a=Math.min(400,140+6*t.length)}function b(){
+}),w('fruitSlash',m,'Fruit Slash',o.green,'Chain slices for a combo bonus, snag the rare golden fruit, and dodge the bombs.','Drag / swipe across fruit · slice several in one swipe for a combo bonus · avoid the bombs · miss 3 and it is over',function(r){
+var W=400,H=420,ctx=r.canvas(W,H);
+var fruitTypes=[
+  {col:o.coral,pts:10,rad:22},
+  {col:o.orange,pts:10,rad:22},
+  {col:o.green,pts:12,rad:24},
+  {col:o.magenta,pts:10,rad:20},
+  {col:o.yellow,pts:15,rad:18}
+];
+var fruits,halves,trail,livesLost,score,spawnTimer,elapsed,streak,bestStreak,swipeHits,dragging,lastPt,flash;
+function multiplier(){return 1+Math.min(4,Math.floor(streak/5));}
+function spawnOne(){
+  var px=c(60,340);
+  var speedBoost=1+Math.min(.6,elapsed/50);
+  var bombChance=Math.min(.3,.05+score/1800);
+  var goldChance=Math.min(.12,.02+score/3500);
+  var roll=Math.random();
+  var vx=(200-px)*c(.25,.6)+c(-30,30);
+  if(roll<bombChance){
+    fruits.push({x:px,y:H+20,vx:vx,vy:-c(560,720)*speedBoost,rad:Math.random()<.3?24:17,bomb:true,heavy:Math.random()<.3});
+  }else if(roll<bombChance+goldChance){
+    fruits.push({x:px,y:H+20,vx:vx,vy:-c(640,780)*speedBoost,rad:16,golden:true,pts:50,col:o.yellow});
+  }else{
+    var ft=u(fruitTypes);
+    fruits.push({x:px,y:H+20,vx:vx,vy:-c(540,700)*speedBoost,rad:ft.rad,col:ft.col,pts:ft.pts});
+  }
+}
+function spawnWave(){
+  var n=1+f(1+Math.floor(elapsed/12)),k;
+  for(k=0;k<n;k++)spawnOne();
+}
+function sliceSegment(p0,p1){
+  var dx=p1.x-p0.x,dy=p1.y-p0.y,len2=dx*dx+dy*dy||1,hitsThisMove=0,i,fr,tt,px,py,mult,chainBonus;
+  for(i=fruits.length-1;i>=0;i--){
+    fr=fruits[i];
+    tt=s(((fr.x-p0.x)*dx+(fr.y-p0.y)*dy)/len2,0,1);
+    px=p0.x+dx*tt;py=p0.y+dy*tt;
+    if(Math.hypot(fr.x-px,fr.y-py)<fr.rad){
+      fruits.splice(i,1);
+      if(fr.bomb){
+        r.burst(fr.x,fr.y,o.coral,30);
+        flash=1;
+        render(.016);
+        r.over(score,'You sliced a bomb! Score: '+score);
+        return;
+      }
+      hitsThisMove++;
+      swipeHits++;
+      streak++;
+      bestStreak=Math.max(bestStreak,streak);
+      mult=multiplier();
+      chainBonus=hitsThisMove>1?1.5:1;
+      score+=Math.round(fr.pts*mult*chainBonus);
+      r.burst(fr.x,fr.y,fr.col,fr.golden?26:14);
+      halves.push({x:fr.x,y:fr.y,vx:fr.vx-60,vy:.4*fr.vy,ang:0,va:-3,col:fr.col,side:0},
+                  {x:fr.x,y:fr.y,vx:fr.vx+60,vy:.4*fr.vy,ang:0,va:3,col:fr.col,side:1});
+    }
+  }
+}
+function step(dt){
+  elapsed+=dt;
+  if((spawnTimer-=dt)<=0){
+    spawnWave();
+    spawnTimer=Math.max(.32,c(.8,1.4)-elapsed*.012);
+  }
+  var i,fr,hv;
+  for(i=fruits.length-1;i>=0;i--){
+    fr=fruits[i];
+    fr.vy+=720*dt;fr.x+=fr.vx*dt;fr.y+=fr.vy*dt;
+    if(fr.y>H+40&&fr.vy>0){
+      if(!fr.bomb){livesLost++;streak=0;r.burst(fr.x,H-10,o.coral,6);}
+      fruits.splice(i,1);
+    }
+  }
+  for(i=halves.length-1;i>=0;i--){
+    hv=halves[i];
+    hv.vy+=720*dt;hv.x+=hv.vx*dt;hv.y+=hv.vy*dt;hv.ang+=hv.va*dt;
+    if(hv.y>H+40)halves.splice(i,1);
+  }
+  if(flash>0)flash=Math.max(0,flash-2*dt);
+  render(dt);
+  if(livesLost>=3){r.over(score,'Too many got away. Score: '+score);}
+}
+function render(dt){
+  g(ctx,W,H);
+  if(flash>0){ctx.fillStyle='rgba(255,107,74,'+(.4*flash)+')';ctx.fillRect(0,0,W,H);}
+  fruits.forEach(function(fr){
+    if(fr.bomb){
+      d(ctx,fr.x,fr.y,fr.rad,'#0b0518');
+      ctx.strokeStyle=fr.heavy?o.magenta:o.dim;ctx.lineWidth=fr.heavy?3:2;ctx.stroke();
+      v(ctx,fr.x+6,fr.y-14,fr.x+12,fr.y-22,o.orange,3);
+      d(ctx,fr.x+12,fr.y-23,3,o.yellow);
+    }else{
+      d(ctx,fr.x,fr.y,fr.rad,fr.col);
+      d(ctx,fr.x-7,fr.y-7,5,'rgba(255,255,255,.35)');
+      v(ctx,fr.x,fr.y-fr.rad,fr.x+4,fr.y-fr.rad-8,o.green,3);
+      if(fr.golden){
+        ctx.strokeStyle='rgba(255,224,102,.85)';ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(fr.x,fr.y,fr.rad+5,0,e);ctx.stroke();
+      }
+    }
+  });
+  halves.forEach(function(hv){
+    ctx.save();ctx.translate(hv.x,hv.y);ctx.rotate(hv.ang);
+    ctx.beginPath();ctx.arc(0,0,22,hv.side?0:Math.PI,hv.side?Math.PI:e);ctx.closePath();
+    ctx.fillStyle=hv.col;ctx.fill();
+    ctx.beginPath();ctx.arc(0,0,15,hv.side?0:Math.PI,hv.side?Math.PI:e);ctx.closePath();
+    ctx.fillStyle=o.ink;ctx.fill();
+    ctx.restore();
+  });
+  for(var i=1;i<trail.length;i++)v(ctx,trail[i-1].x,trail[i-1].y,trail[i].x,trail[i].y,'rgba(233,251,249,'+(i/trail.length)+')',2+.6*i);
+  r.fxStep(dt);
+  r.hud([['SCORE',y(score)],['MISSES',livesLost+'/3'],['COMBO','x'+multiplier()]]);
+}
+r.pointer({
+  down:function(pt){dragging=true;lastPt=pt;trail=[pt];swipeHits=0;},
+  move:function(pt){
+    if(!dragging)return;
+    sliceSegment(lastPt,pt);
+    lastPt=pt;trail.push(pt);
+    if(trail.length>9)trail.shift();
+  },
+  up:function(){
+    dragging=false;trail=[];
+    if(swipeHits>=3){score+=10*swipeHits;r.burst(200,200,o.yellow,20);}
+    swipeHits=0;
+  }
+});
+r.begin(function(){
+  fruits=[];halves=[];trail=[];livesLost=0;score=0;spawnTimer=.6;elapsed=0;streak=0;bestStreak=0;swipeHits=0;dragging=false;lastPt=null;flash=0;
+  r.fx=[];
+  r.frame(step);
+});
+}),w('towerStack',m,'Tower Stack',o.blue,'Time each drop to land the sliding block squarely on the tower below.','Tap / click / Space to drop the block · perfect drops shrink the target as you climb',function(r){
+var W=320,H=480,BLOCK_H=22,BASE_Y=400,ctx=r.canvas(W,H);
+var blocks,current,dir,speed,fallingPieces,perfectStreak,bestStreak,hue,camY,settle

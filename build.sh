@@ -29,7 +29,7 @@ fi
 # separate patch script every time Pellet Prowler's code changes.
 cat g01.js g02.js g03.js g04.js g05.js g06.js g07.js g08.js g09.js g10.js g11.js g12.js > public/games-ext.js
 EXT_SUM=$(md5sum public/games-ext.js | awk '{print $1}')
-if [ "$EXT_SUM" != "795d6a24e9cb8e9caa58e4fddc2e807d" ]; then
+if [ "$EXT_SUM" != "2cc2e90b29f752212183e5214bf21115" ]; then
   echo "GAMES BUNDLE MISMATCH: got $EXT_SUM"
   exit 1
 fi
@@ -54,8 +54,8 @@ node patch.js
 # --- how-to-play data: one blurb + full instructions per game, checksum hard gate
 # (generated once and verified, so an exact match is expected) ---
 HOWTO_SUM=$(md5sum howto.js | awk '{print $1}')
-if [ "$HOWTO_SUM" != "da52808b41ed52e8406d8b31addd3616" ]; then
-  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected da52808b41ed52e8406d8b31addd3616"
+if [ "$HOWTO_SUM" != "25cb6f32f6eaad38e5215762c44b06ad" ]; then
+  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected 25cb6f32f6eaad38e5215762c44b06ad"
   exit 1
 fi
 node --check howto.js

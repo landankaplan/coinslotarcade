@@ -1,8 +1,148 @@
-d(s,250-120*k,40+12*k,3,o.coral);else for(u=0;u<10;u++)s.strokeStyle=u%2?o.yellow:o.coral,s.lineWidth=5,s.beginPath(),s.moveTo(130,100),s.lineTo(130+Math.cos(.628*u)*(70+70*(1-c)),100+Math.sin(.628*u)*(70+70*(1-c))),s.stroke();for(x(s,'FUSE '+'▮'.repeat(6-e)+'▯'.repeat(e),320,100,13,o.dim),S=Math.min(38,360/t.length),u=0;u<t.length;u++)m=200-t.length*S/2+u*S+S/2,v(s,m-.35*S,236,m+.35*S,236,o.dim,3),(n[t.charAt(u)]||c>0&&e>=6)&&x(s,t.charAt(u).toUpperCase(),m,220,26,n[t.charAt(u)]?o.ink:o.coral);for(x(s,f,200,268,15,o.yellow),b=0;b<3;b++)for(u=0;u<w[b].length;u++)m=20+18*b+37*u,M=300+46*b,k=w[b].charAt(u),p(s,m+1,M,34,40,7,h[k]?t.indexOf(k)>-1?o.green:'rgba(255,107,74,.35)':o.grid),x(s,k.toUpperCase(),m+18,M+21,18,h[k]?o.bg:o.ink);r.fxStep(l),r.hud([['SCORE',y(a)],['DEFUSED',i]])}r.press=function(r){m(r)},r.pointer({down:function(r){var t,n,o,e,a;for(t=0;t<3;t++)for(o=w[t],n=0;n<o.length;n++)e=20+18*t+37*n+18,a=300+46*t+20,Math.abs(r.x-e)<18&&Math.abs(r.y-a)<21&&m(o.charAt(n))}}),
-r.begin(function(){a=0,i=0,b(),r.fx=[],r.frame(M)})}),w('wordHunt',S,'Word Hunt',o.teal,'Find every hidden word in the letter grid, in any direction, before time runs out.','Drag from the first to the last letter · or Space to anchor, arrows to stretch, Space to confirm',function(t){var n,e,a,i,l,c,s,d,w,b,m,M,k,S,E,A=400,T=10,L=36,C=120,P=t.canvas(A,500),D=[[1,0],[0,1],[1,1],[-1,1],[-1,0],[0,-1],[-1,-1],[1,-1]],O=[o.coral,o.yellow,o.green,o.blue,o.violet,o.magenta,o.orange,o.teal];function U(){var r,t,o,s,y,p,x,v,g;do{for(n=[],o=0;o<100;o++)n.push('');r=h(R.filter(function(r){return r.length>=4&&r.length<=8})).slice(0,6),e=[],r.forEach(function(r){for(t=0;t<200;t++){for(y=u(D),p=f(T),x=f(T),s=!0,v=0;v<r.length;v++)if(g=(x+y[1]*v)*T+p+y[0]*v,p+y[0]*v<0||p+y[0]*v>=T||x+y[1]*v<0||x+y[1]*v>=T||n[g]&&n[g]!==r.charAt(v)){s=!1;break}if(s){for(v=0;v<r.length;v++)n[(x+y[1]*v)*T+p+y[0]*v]=r.charAt(v);e.push(r);break}}})}while(e.length<5)
-;for(o=0;o<100;o++)n[o]||(n[o]=String.fromCharCode(97+f(26)));a={},i={},l=Math.max(60,100-4*c),d=null,w=null,b=!1,m=0,k=null,E=''}function I(r,t){var n,o=t.x-r.x,e=t.y-r.y,a=Math.abs(o),i=Math.abs(e);for(a>2*i?e=0:i>2*a?o=0:(n=Math.max(a,i),o=Math.sign(o)*n,e=Math.sign(e)*n);r.x+o<0||r.x+o>=T||r.y+e<0||r.y+e>=T;)o-=Math.sign(o),e-=Math.sign(e);return{x:r.x+o,y:r.y+e}}function W(r,t){var n,o=[],e=Math.sign(t.x-r.x),a=Math.sign(t.y-r.y),i=Math.max(Math.abs(t.x-r.x),Math.abs(t.y-r.y));for(n=0;n<=i;n++)o.push((r.y+a*n)*T+r.x+e*n);return o}function F(r,f){var u,h=W(r,f),y=h.map(function(r){return n[r]}).join(''),p=y.split('').reverse().join(''),x=e.filter(function(r){return!a[r]&&(r===y||r===p)})[0];!x||h.length<2?m=.3:(a[x]=1,u=O[Object.keys(a).length%O.length],h.forEach(function(r){i[r]=u}),s+=20,t.burst(20+(f.x+.5)*L,C+(f.y+.5)*L,u,14),e.every(function(r){return a[r]})&&(s+=50+Math.floor(l),c++,E='Grid cleared!',b=!1,d=null,t.burst(200,250,o.yellow,40),t.later(U,1300),l+=0))}
-function B(r){var t=Math.floor((r.x-20)/L),n=Math.floor((r.y-C)/L);return t>=0&&n>=0&&t<T&&n<T?{x:t,y:n}:null}function H(r){if((l-=r)<=0)return q(r),void t.over(s,'Time is up with '+e.filter(function(r){return!a[r]}).length+' words still hidden. Score: '+s);q(r)}function q(f){var u,h,b,R,D,O={};for(m>0&&(m-=f),g(P,A,500),x(P,'GRID '+(c+1)+' · '+Math.max(0,Math.ceil(l))+'s',200,20,16,l<15?o.coral:o.ink),e.forEach(function(r,t){x(P,r.toUpperCase(),20+t%3*125,52+26*Math.floor(t/3),15,a[r]?o.dim:o.ink,'left'),a[r]&&v(P,20+t%3*125,52+26*Math.floor(t/3),20+t%3*125+11*r.length,52+26*Math.floor(t/3),o.green,2)}),R=d||k,D=d?w:k?I(k,M):null,R&&D&&W(R,D).forEach(function(r){O[r]=1}),u=0;u<100;u++)h=20+u%T*L,b=C+Math.floor(u/T)*L,p(P,h+1,b+1,34,34,8,O[u]?m>0?o.coral:o.dim:i[u]?i[u]:o.grid),x(P,n[u].toUpperCase(),h+18,b+18+1,19,i[u]?o.bg:o.ink);S&&(P.strokeStyle=o.ink,P.lineWidth=2,r.L(P,20+M.x*L+2,C+M.y*L+2,32,32,8),P.stroke()),x(P,E,200,106,14,o.yellow),t.fxStep(f),
-t.hud([['SCORE',y(s)],['FOUND',Object.keys(a).length+'/'+e.length]])}t.pointer({down:function(r){var t=B(r);S=!1,t&&(d=t,w=t,b=!0)},move:function(r,t,n){var o;b&&d&&(o=B(r))&&(w=I(d,o))},up:function(){b&&d&&w&&F(d,w),b=!1,d=null,w=null}}),t.press=function(r){S=!0,'ArrowLeft'===r||'a'===r?M.x=Math.max(0,M.x-1):'ArrowRight'===r||'d'===r?M.x=Math.min(9,M.x+1):'ArrowUp'===r||'w'===r?M.y=Math.max(0,M.y-1):'ArrowDown'===r||'s'===r?M.y=Math.min(9,M.y+1):' '===r||'Enter'===r?k?(F(k,I(k,M)),k=null):k={x:M.x,y:M.y}:'Escape'===r&&(k=null)},t.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRight'],['Mark','Space']]),t.begin(function(){c=0,s=0,M={x:4,y:4},S=!1,U(),t.fx=[],t.frame(H)})}),w('laneLeaper',b,'Lane Leaper',o.green,'Hop across traffic and a sinking river — chain pad-fills for a rising streak bonus.','Arrows / WASD to hop · swipe on mobile',function(r){
+ord was '+word.toUpperCase();r.later(function(){r.over(score,'Boom. '+defused+' word'+(1===defused?'':'s')+' defused. Score: '+score)},1500)}
+function revealAndCheck(ch){guessed[ch]=1;if(isComplete()){ended=true;score+=10*word.length+10*(6-wrongCount)+Math.floor(timeLeft);defused++;message='Defused! '+word.toUpperCase();r.later(newWord,1300)}}
+function guessLetter(ch){if(ended||guessed[ch]||1!==ch.length||ch<'a'||ch>'z')return;if(word.indexOf(ch)>-1){r.burst(60+280*Math.random(),215,o.green,6);feedback=ch.toUpperCase()+' is a '+letterNote(ch)+' letter — in the word!';revealAndCheck(ch)}else{guessed[ch]=1;wrongCount++;r.burst(200,100,o.coral,8);feedback=ch.toUpperCase()+' is a '+letterNote(ch)+' letter — not in the word.';if(wrongCount>=6)explode()}}
+function hint(){if(ended||hintsUsed>=2)return;var unrevealed=[];for(var i=0;i<word.length;i++){var ch=word.charAt(i);if(!guessed[ch]&&unrevealed.indexOf(ch)<0)unrevealed.push(ch)}if(!unrevealed.length)return;var pick=u(unrevealed);hintsUsed++;wrongCount++;timeLeft=Math.max(4,timeLeft-8);feedback='Hint: revealed "'+pick.toUpperCase()+'"';r.burst(200,215,o.violet,10);revealAndCheck(pick);if(!ended&&wrongCount>=6)explode()}
+function render(dt){
+if(!ended){if((timeLeft-=dt)<=0){timeLeft=0;explode()}}
+if(boom>0)boom-=.5*dt;
+g(ctx,400,470,o.bg);
+x(ctx,TIER_NAMES[tier]+' · '+Math.max(0,Math.ceil(timeLeft))+'s',320,16,12,timeLeft<10?o.coral:o.dim);
+p(ctx,25,8,80,22,8,hintsUsed<2&&!ended?o.violet:o.grid);
+x(ctx,'HINT '+(2-hintsUsed),65,20,11,hintsUsed<2&&!ended?o.bg:o.dim);
+var dangerRatio=Math.max(wrongCount/6,1-timeLeft/totalTime);
+if(wrongCount<6&&boom<=0){
+d(ctx,130,100,44,'#0b0518');
+ctx.strokeStyle=o.dim;ctx.lineWidth=3;ctx.stroke();
+d(ctx,116,86,8,'rgba(255,255,255,.15)');
+p(ctx,120,48,20,12,3,o.dim);
+var fusePos=Math.min(1,dangerRatio);
+ctx.beginPath();ctx.moveTo(130,48);ctx.quadraticCurveTo(190,20,250-120*fusePos,40+12*fusePos);ctx.strokeStyle=o.orange;ctx.lineWidth=4;ctx.stroke();
+ctx.beginPath();ctx.moveTo(250-120*fusePos,40+12*fusePos);ctx.quadraticCurveTo(255,40,260,44);ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=4;ctx.stroke();
+d(ctx,250-120*fusePos,40+12*fusePos,7+2*Math.sin(performance.now()/60),o.yellow);
+d(ctx,250-120*fusePos,40+12*fusePos,3,o.coral);
+}else{
+for(var u2=0;u2<10;u2++){ctx.strokeStyle=u2%2?o.yellow:o.coral;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(130,100);ctx.lineTo(130+Math.cos(.628*u2)*(70+70*(1-Math.max(0,boom))),100+Math.sin(.628*u2)*(70+70*(1-Math.max(0,boom))));ctx.stroke()}
+}
+x(ctx,'STRIKES '+'▮'.repeat(6-wrongCount)+'▯'.repeat(wrongCount),320,100,13,o.dim);
+var slotW=Math.min(38,360/word.length);
+for(var i=0;i<word.length;i++){var midX=200-word.length*slotW/2+i*slotW+slotW/2;v(ctx,midX-.35*slotW,236,midX+.35*slotW,236,o.dim,3);if(guessed[word.charAt(i)]||boom>0&&wrongCount>=6)x(ctx,word.charAt(i).toUpperCase(),midX,220,26,guessed[word.charAt(i)]?o.ink:o.coral)}
+x(ctx,feedback,200,254,12,o.violet);
+x(ctx,message,200,272,15,o.yellow);
+for(var row=0;row<3;row++)for(var col=0;col<rows[row].length;col++){var kx=20+18*row+37*col,ky=300+46*row,letter=rows[row].charAt(col);p(ctx,kx+1,ky,34,40,7,guessed[letter]?word.indexOf(letter)>-1?o.green:'rgba(255,107,74,.35)':o.grid);x(ctx,letter.toUpperCase(),kx+18,ky+21,18,guessed[letter]?o.bg:o.ink)}
+r.fxStep(dt);
+r.hud([['SCORE',y(score)],['DEFUSED',defused]]);
+}
+r.press=function(k){if(' '===k)hint();else guessLetter(k)};
+r.pointer({down:function(pt){
+if(pt.x>25&&pt.x<105&&pt.y>8&&pt.y<30)return hint();
+for(var row=0;row<3;row++)for(var col=0;col<rows[row].length;col++){var kx=20+18*row+37*col+18,ky=300+46*row+20;if(Math.abs(pt.x-kx)<18&&Math.abs(pt.y-ky)<21)guessLetter(rows[row].charAt(col))}
+}});
+r.pad([['Hint','Space']]);
+r.begin(function(){score=0;defused=0;newWord();r.fx=[];r.frame(render)});
+}),w('wordHunt',S,'Word Hunt',o.teal,'Find every hidden word in the letter grid — forwards, backwards, or on the diagonal — before time runs out. Categories get harder each grid.','Drag from the first to the last letter · or Space to anchor, arrows to stretch, Space to confirm · chain finds quickly for a speed bonus',function(t){
+var GRID=10,CELL=36,GRID_TOP=120,CANVAS_W=400,CANVAS_H=500,ctx=t.canvas(CANVAS_W,CANVAS_H);
+var DIRS=[[1,0],[0,1],[1,1],[-1,1],[-1,0],[0,-1],[-1,-1],[1,-1]];
+var cycleColors=[o.coral,o.yellow,o.green,o.blue,o.violet,o.magenta,o.orange,o.teal];
+var CATEGORIES={
+ANIMALS:['tiger','zebra','otter','rabbit','falcon','beaver','dolphin','giraffe','panther','turtle'],
+SPACE:['comet','planet','rocket','galaxy','meteor','nebula','orbit','asteroid','eclipse','cosmos'],
+OCEAN:['coral','shark','whale','anchor','harbor','plankton','lagoon','tide','voyage','current'],
+TECH:['laptop','signal','sensor','router','pixel','server','cursor','circuit','battery','network']
+};
+var CATEGORY_NAMES=['ANIMALS','SPACE','OCEAN','TECH','MISC'];
+var cells,words,found,cellColor,timeLeft,dragStart,dragEnd,dragging,wrongFlash,flashCells,keyAnchor,keyCursor,keyboardMode,message,gridCount,category,score,comboTimer;
+function newGrid(){
+var placed;
+do{
+cells=[];
+for(var idx=0;idx<100;idx++)cells.push('');
+category=CATEGORY_NAMES[gridCount%CATEGORY_NAMES.length];
+var pool='MISC'===category?R.filter(function(wd){return wd.length>=4&&wd.length<=8}):CATEGORIES[category];
+var picks=h(pool.slice()).slice(0,6);
+placed=[];
+picks.forEach(function(wd){
+for(var attempt=0;attempt<200;attempt++){
+var dir=u(DIRS),startCol=f(GRID),startRow=f(GRID),ok=true,idxs=[];
+for(var v2=0;v2<wd.length;v2++){
+var col=startCol+dir[0]*v2,row=startRow+dir[1]*v2;
+if(col<0||col>=GRID||row<0||row>=GRID){ok=false;break}
+var g2=row*GRID+col;
+if(cells[g2]&&cells[g2]!==wd.charAt(v2)){ok=false;break}
+idxs.push(g2);
+}
+if(ok){idxs.forEach(function(g3,v3){cells[g3]=wd.charAt(v3)});placed.push(wd);break}
+}
+});
+}while(placed.length<5);
+words=placed;
+for(var idx2=0;idx2<100;idx2++)if(!cells[idx2])cells[idx2]=String.fromCharCode(97+f(26));
+found={};cellColor={};timeLeft=Math.max(60,100-4*gridCount);dragStart=null;dragEnd=null;dragging=false;wrongFlash=0;flashCells=[];keyAnchor=null;message='';comboTimer=0;
+}
+function cellsAlong(startPt,endPt){var result=[],dx=Math.sign(endPt.x-startPt.x),dy=Math.sign(endPt.y-startPt.y),steps=Math.max(Math.abs(endPt.x-startPt.x),Math.abs(endPt.y-startPt.y));for(var n2=0;n2<=steps;n2++)result.push((startPt.y+dy*n2)*GRID+startPt.x+dx*n2);return result}
+function snapLine(startPt,endPt){var dx=endPt.x-startPt.x,dy=endPt.y-startPt.y,adx=Math.abs(dx),ady=Math.abs(dy),mag;if(adx>2*ady)dy=0;else if(ady>2*adx)dx=0;else{mag=Math.max(adx,ady);dx=Math.sign(dx)*mag;dy=Math.sign(dy)*mag}while(startPt.x+dx<0||startPt.x+dx>=GRID||startPt.y+dy<0||startPt.y+dy>=GRID){dx-=Math.sign(dx);dy-=Math.sign(dy)}return{x:startPt.x+dx,y:startPt.y+dy}}
+function pointToCell(pt){var col=Math.floor((pt.x-20)/CELL),row=Math.floor((pt.y-GRID_TOP)/CELL);return col>=0&&row>=0&&col<GRID&&row<GRID?{x:col,y:row}:null}
+function trySelection(startPt,endPt){
+var idxs=cellsAlong(startPt,endPt),forward=idxs.map(function(g4){return cells[g4]}).join(''),reversed=forward.split('').reverse().join(''),match=words.filter(function(wd){return!found[wd]&&(wd===forward||wd===reversed)})[0];
+if(!match||idxs.length<2){wrongFlash=.3;flashCells=idxs;t.burst(20+(endPt.x+.5)*CELL,GRID_TOP+(endPt.y+.5)*CELL,o.coral,8);return}
+found[match]=1;
+var col2=cycleColors[Object.keys(found).length%cycleColors.length];
+idxs.forEach(function(g5){cellColor[g5]=col2});
+var speedBonus=comboTimer>0?20:0;
+score+=15+3*match.length+speedBonus;
+comboTimer=6;
+t.burst(20+(endPt.x+.5)*CELL,GRID_TOP+(endPt.y+.5)*CELL,col2,14+speedBonus/2);
+if(words.every(function(wd){return found[wd]})){
+score+=50+Math.floor(timeLeft);
+gridCount++;
+message='Grid cleared!';
+dragging=false;dragStart=null;
+t.burst(200,250,o.yellow,40);
+t.later(newGrid,1300);
+}
+}
+function tick(dt){
+if(comboTimer>0)comboTimer-=dt;
+if((timeLeft-=dt)<=0){draw(dt);t.over(score,'Time is up with '+words.filter(function(wd){return!found[wd]}).length+' words still hidden. Score: '+score);return}
+draw(dt);
+}
+function draw(dt){
+if(wrongFlash>0)wrongFlash-=dt;
+g(ctx,CANVAS_W,CANVAS_H,o.bg);
+x(ctx,'GRID '+(gridCount+1)+' · '+category+' · '+Math.max(0,Math.ceil(timeLeft))+'s',200,20,15,timeLeft<15?o.coral:o.ink);
+words.forEach(function(wd,idx3){x(ctx,wd.toUpperCase(),20+idx3%3*125,52+26*Math.floor(idx3/3),14,found[wd]?o.dim:o.ink,'left');if(found[wd])v(ctx,20+idx3%3*125,52+26*Math.floor(idx3/3),20+idx3%3*125+11*wd.length,52+26*Math.floor(idx3/3),o.green,2)});
+var liveStart=dragStart||keyAnchor,liveEnd=dragStart?dragEnd:keyAnchor?snapLine(keyAnchor,keyCursor):null,liveOverlay={};
+if(liveStart&&liveEnd)cellsAlong(liveStart,liveEnd).forEach(function(g6){liveOverlay[g6]=1});
+var flashOverlay={};
+if(wrongFlash>0)flashCells.forEach(function(g7){flashOverlay[g7]=1});
+for(var cellIdx=0;cellIdx<100;cellIdx++){
+var cx=20+cellIdx%GRID*CELL,cy=GRID_TOP+Math.floor(cellIdx/GRID)*CELL;
+var bg2=flashOverlay[cellIdx]?o.coral:liveOverlay[cellIdx]?o.dim:cellColor[cellIdx]?cellColor[cellIdx]:o.grid;
+p(ctx,cx+1,cy+1,34,34,8,bg2);
+x(ctx,cells[cellIdx].toUpperCase(),cx+18,cy+19,19,cellColor[cellIdx]?o.bg:o.ink);
+}
+if(keyboardMode){ctx.strokeStyle=o.ink;ctx.lineWidth=2;ctx.strokeRect(20+keyCursor.x*CELL+2,GRID_TOP+keyCursor.y*CELL+2,32,32)}
+x(ctx,message,200,106,14,o.yellow);
+if(comboTimer>0)x(ctx,'Chain! next find +20',200,470,11,o.teal);
+t.fxStep(dt);
+t.hud([['SCORE',y(score)],['FOUND',Object.keys(found).length+'/'+words.length]]);
+}
+t.pointer({
+down:function(pt){var cell=pointToCell(pt);keyboardMode=false;if(cell){dragStart=cell;dragEnd=cell;dragging=true}},
+move:function(pt){if(dragging&&dragStart){var cell=pointToCell(pt);if(cell)dragEnd=snapLine(dragStart,cell)}},
+up:function(){dragging&&dragStart&&dragEnd&&trySelection(dragStart,dragEnd);dragging=false;dragStart=null;dragEnd=null}
+});
+t.press=function(k){
+keyboardMode=true;
+if('ArrowLeft'===k||'a'===k)keyCursor.x=Math.max(0,keyCursor.x-1);
+else if('ArrowRight'===k||'d'===k)keyCursor.x=Math.min(GRID-1,keyCursor.x+1);
+else if('ArrowUp'===k||'w'===k)keyCursor.y=Math.max(0,keyCursor.y-1);
+else if('ArrowDown'===k||'s'===k)keyCursor.y=Math.min(GRID-1,keyCursor.y+1);
+else if(' '===k||'Enter'===k){if(keyAnchor){trySelection(keyAnchor,snapLine(keyAnchor,keyCursor));keyAnchor=null}else keyAnchor={x:keyCursor.x,y:keyCursor.y}}
+else if('Escape'===k)keyAnchor=null;
+};
+t.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRight'],['Mark','Space']]);
+t.begin(function(){gridCount=0;score=0;keyCursor={x:4,y:4};keyboardMode=false;newGrid();t.fx=[];t.frame(tick)});
+}),w('laneLeaper',b,'Lane Leaper',o.green,'Hop across traffic and a sinking river — chain pad-fills for a rising streak bonus.','Arrows / WASD to hop · swipe on mobile',function(r){
 var lanes,frog,pads,lives,score,level,timer,hitLock,elapsed,streak;
 var TILE=30,W=390,ctx=r.canvas(W,390),PAD_X=[45,120,195,270,345];
 
