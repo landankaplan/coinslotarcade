@@ -72,6 +72,25 @@ cp pictures.js public/pictures.js
 cp polish.js public/polish.js
 node --check public/polish.js
 
+# --- Pong 3D: vendored physics (Matter.js) + rendering (Three.js) libs.
+# Loaded lazily (dynamic <script> injection) only when a player opens Pong,
+# so the ~670KB combined payload never touches anyone who does not play it.
+# Checksum hard-gated: these are vendored builds, copied byte-for-byte, never
+# hand-edited, so an exact match is expected. ---
+MATTER_SUM=$(md5sum matter.min.js | awk '{print $1}')
+if [ "$MATTER_SUM" != "16937dabe97701f234c665b43175d93b" ]; then
+  echo "MATTER.JS CHECKSUM MISMATCH: got $MATTER_SUM"
+  exit 1
+fi
+THREE_SUM=$(md5sum three.min.js | awk '{print $1}')
+if [ "$THREE_SUM" != "eb8549863a97355411c3259a3f93b8e1" ]; then
+  echo "THREE.JS CHECKSUM MISMATCH: got $THREE_SUM"
+  exit 1
+fi
+cp matter.min.js public/matter.min.js
+cp three.min.js public/three.min.js
+echo "Pong 3D libs OK: matter.js $MATTER_SUM, three.js $THREE_SUM"
+
 sed -i 's/var BY_TITLE = {}, id;/var BY_TITLE = {}, id; if (window.CSA_EDU_GAMES) for (id in window.CSA_EDU_GAMES) GAMES[id] = window.CSA_EDU_GAMES[id];/' public/pictures.js
 if [ "$(grep -c CSA_EDU_GAMES public/pictures.js)" != "1" ]; then
   echo "PICTURES PATCH ABORTED"
