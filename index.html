@@ -459,253 +459,459 @@ g.snake = {
   category: "Arcade Classics",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="3"/><rect x="11" y="4" width="10" height="3"/><rect x="3" y="9" width="10" height="3"/><rect x="14" y="9" width="7" height="3"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>',
   mount: function(el, t) {
-    var W = 380, HHt = 520;
-    var o = A(el, W, HHt);
-    var ctx = o.ctx;
-    var paddle, balls, bricks, powerups, particles, level, lives, score, combo, state, raf, last, shake, flash, keyState, effects;
-    var paddleW0 = 70, paddleH = 12;
+    function startGame(){
+      var W = 380, HHt = 520;
+      var paddleW0 = 70, paddleH = 12, paddleDepth = 16, ballR = 6;
+      var paddle, balls, bricks, powerups, level, lives, score, combo, state, raf, last, keyState, effects, hitFlashTimer;
 
-    function layoutBricks(){
-      bricks = [];
-      var rows = Math.min(4+level, 8);
-      var cols = 8;
-      var bw = (W-20)/cols, bh = 18;
-      for (var r=0;r<rows;r++){
-        for (var c=0;c<cols;c++){
-          var hp = 1 + (Math.random() < Math.min(0.1+level*0.06,0.5) ? (Math.random()<0.3?2:1) : 0);
-          hp = Math.min(hp,3);
-          bricks.push({x:10+c*bw, y:40+r*bh, w:bw-4, h:bh-4, hp:hp, maxhp:hp, alive:true});
+      Matter.Resolver._restingThresh = 0.001;
+      var engine = Matter.Engine.create();
+      engine.gravity.x = 0; engine.gravity.y = 0;
+      var wallLeft = Matter.Bodies.rectangle(-10, HHt/2, 20, HHt+40, {isStatic:true, restitution:1, friction:0, label:'wall'});
+      var wallRight = Matter.Bodies.rectangle(W+10, HHt/2, 20, HHt+40, {isStatic:true, restitution:1, friction:0, label:'wallSide'});
+      var wallTop = Matter.Bodies.rectangle(W/2, -10, W, 20, {isStatic:true, restitution:1, friction:0, label:'wallTop'});
+      Matter.Composite.add(engine.world, [wallLeft, wallRight, wallTop]);
+
+      var paddleBody = null;
+      function makePaddleBody(){
+        if (paddleBody) Matter.Composite.remove(engine.world, paddleBody);
+        paddleBody = Matter.Bodies.rectangle(paddle.x+paddle.w/2, paddle.y+paddleH/2, paddle.w, paddleDepth, {isStatic:true, restitution:1, friction:0, label:'paddle'});
+        Matter.Composite.add(engine.world, paddleBody);
+      }
+
+      var brickBodies = [];
+      function layoutBricks(){
+        brickBodies.forEach(function(b){ Matter.Composite.remove(engine.world, b); });
+        brickBodies = [];
+        bricks = [];
+        var rows = Math.min(4+level, 8);
+        var cols = 8;
+        var bw = (W-20)/cols, bh = 18;
+        for (var r=0;r<rows;r++){
+          for (var c=0;c<cols;c++){
+            var hp = 1 + (Math.random() < Math.min(0.1+level*0.06,0.5) ? (Math.random()<0.3?2:1) : 0);
+            hp = Math.min(hp,3);
+            var br = {x:10+c*bw, y:40+r*bh, w:bw-4, h:bh-4, hp:hp, maxhp:hp, alive:true};
+            bricks.push(br);
+            var body = Matter.Bodies.rectangle(br.x+br.w/2, br.y+br.h/2, br.w, br.h, {isStatic:true, restitution:1, friction:0, label:'brick'});
+            body.brickRef = br;
+            brickBodies.push(body);
+            Matter.Composite.add(engine.world, body);
+          }
         }
       }
-    }
-
-    function reset(){
-      level = 1; lives = 3; score = 0; combo = 0; shake = 0; flash = 0;
-      keyState = {};
-      effects = {wideUntil:0, slowUntil:0};
-      paddle = {x:W/2-paddleW0/2, w:paddleW0, y:HHt-30};
-      particles = []; powerups = [];
-      layoutBricks();
-      resetBall();
-      updateHud();
-    }
-    function resetBall(){
-      balls = [{x:W/2,y:paddle.y-10,vx:0,vy:0,r:6,stuck:true}];
-      state = 'ready';
-    }
-    function launch(){
-      if (state!=='ready') return;
-      state = 'playing';
-      balls.forEach(function(b){ if (b.stuck){ b.stuck=false; b.vx=(Math.random()*2-1)*2; b.vy=-4.2; } });
-    }
-
-    function updateHud(){
-      t.setHud('<div style="display:flex;gap:14px;align-items:center"><div style="font-size:20px;font-weight:700;color:'+R.coral+'">'+score+'</div><div style="font-size:12px;color:'+R.dim+'">Lv '+level+'</div><div style="font-size:12px;color:'+R.dim+'">combo x'+(1+Math.floor(combo/5))+'</div><div style="font-size:12px;color:'+R.yellow+'">'+'♥'.repeat(lives)+'</div></div>');
-    }
-
-    function burst(x,y,color,n){
-      for (var i=0;i<(n||10);i++){
-        var a = Math.random()*Math.PI*2, sp = 1+Math.random()*3;
-        particles.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color:color});
+      function removeBrickBody(br){
+        for (var i=0;i<brickBodies.length;i++){
+          if (brickBodies[i].brickRef === br){
+            Matter.Composite.remove(engine.world, brickBodies[i]);
+            brickBodies.splice(i,1);
+            break;
+          }
+        }
       }
-    }
 
-    var POWER_TYPES = [
-      {k:'wide', color:R.teal},
-      {k:'multi', color:R.violet},
-      {k:'slow', color:R.blue},
-      {k:'life', color:R.green}
-    ];
-    function maybeDropPower(x,y){
-      if (Math.random()<0.18){
-        var pt = POWER_TYPES[Math.floor(Math.random()*POWER_TYPES.length)];
-        powerups.push({x:x,y:y,vy:1.6,type:pt.k,color:pt.color});
+      function reset(){
+        level = 1; lives = 3; score = 0; combo = 0; hitFlashTimer = 0;
+        keyState = {};
+        effects = {wideUntil:0, slowUntil:0};
+        paddle = {x:W/2-paddleW0/2, w:paddleW0, y:HHt-30};
+        makePaddleBody();
+        powerups = [];
+        layoutBricks();
+        resetBall();
+        updateHud();
       }
-    }
-
-    function applyPower(k){
-      if (k==='wide'){ paddle.w = paddleW0*1.6; effects.wideUntil = performance.now()+9000; }
-      else if (k==='multi'){
-        var extra = [];
+      function resetBall(){
+        if (balls) balls.forEach(function(b){ if (b.body) Matter.Composite.remove(engine.world, b.body); });
+        var body = Matter.Bodies.circle(paddle.x+paddle.w/2, paddle.y-10, ballR, {restitution:1, friction:0, frictionAir:0, label:'ball'});
+        Matter.Composite.add(engine.world, body);
+        balls = [{body:body, r:ballR, stuck:true}];
+        state = 'ready';
+      }
+      function launch(){
+        if (state!=='ready') return;
+        state = 'playing';
         balls.forEach(function(b){
-          if (!b.stuck){
-            extra.push({x:b.x,y:b.y,vx:-b.vx-1,vy:b.vy,r:b.r,stuck:false});
-            extra.push({x:b.x,y:b.y,vx:-b.vx+1,vy:b.vy,r:b.r,stuck:false});
+          if (b.stuck){
+            b.stuck = false;
+            Matter.Body.setVelocity(b.body, {x:(Math.random()*2-1)*2, y:-4.2});
           }
         });
-        balls = balls.concat(extra);
       }
-      else if (k==='slow'){ effects.slowUntil = performance.now()+7000; }
-      else if (k==='life'){ lives = Math.min(lives+1,5); }
-      updateHud();
-    }
 
-    function step(dt){
-      if (keyState['ArrowLeft']||keyState['a']) paddle.x = Math.max(0, paddle.x-7);
-      if (keyState['ArrowRight']||keyState['d']) paddle.x = Math.min(W-paddle.w, paddle.x+7);
+      function updateHud(){
+        t.setHud('<div style="display:flex;gap:14px;align-items:center"><div style="font-size:20px;font-weight:700;color:'+R.coral+'">'+score+'</div><div style="font-size:12px;color:'+R.dim+'">Lv '+level+'</div><div style="font-size:12px;color:'+R.dim+'">combo x'+(1+Math.floor(combo/5))+'</div><div style="font-size:12px;color:'+R.yellow+'">'+'♥'.repeat(lives)+'</div></div>');
+      }
 
-      var now = performance.now();
-      if (now>effects.wideUntil && paddle.w!==paddleW0) paddle.w = paddleW0;
-      var slowFactor = now<effects.slowUntil ? 0.6 : 1;
+      var POWER_TYPES = [
+        {k:'wide', color:R.teal},
+        {k:'multi', color:R.violet},
+        {k:'slow', color:R.blue},
+        {k:'life', color:R.green}
+      ];
+      function maybeDropPower(x,y){
+        if (Math.random()<0.18){
+          var pt = POWER_TYPES[Math.floor(Math.random()*POWER_TYPES.length)];
+          powerups.push({x:x,y:y,vy:1.6,type:pt.k,color:pt.color});
+        }
+      }
 
-      if (state==='playing'){
-        balls.forEach(function(b){
-          if (b.stuck){ b.x = paddle.x+paddle.w/2; return; }
-          b.x += b.vx*slowFactor; b.y += b.vy*slowFactor;
-          if (b.x<b.r){ b.x=b.r; b.vx*=-1; }
-          if (b.x>W-b.r){ b.x=W-b.r; b.vx*=-1; }
-          if (b.y<b.r){ b.y=b.r; b.vy*=-1; shake=Math.max(shake,2); }
-          if (b.vy>0 && b.y+b.r>=paddle.y && b.y+b.r<=paddle.y+paddleH+8 && b.x>=paddle.x && b.x<=paddle.x+paddle.w){
-            var hit = (b.x-(paddle.x+paddle.w/2))/(paddle.w/2);
-            var spd = Math.min(9, Math.hypot(b.vx,b.vy)+0.15);
-            var ang = hit*(Math.PI/3);
-            b.vx = Math.sin(ang)*spd;
-            b.vy = -Math.abs(Math.cos(ang)*spd);
-            b.y = paddle.y-b.r-1;
+      function applyPower(k){
+        if (k==='wide'){ paddle.w = paddleW0*1.6; effects.wideUntil = performance.now()+9000; makePaddleBody(); }
+        else if (k==='multi'){
+          var extra = [];
+          balls.forEach(function(b){
+            if (!b.stuck){
+              var v = b.body.velocity, p = b.body.position;
+              var b1 = Matter.Bodies.circle(p.x, p.y, b.r, {restitution:1, friction:0, frictionAir:0, label:'ball'});
+              var b2 = Matter.Bodies.circle(p.x, p.y, b.r, {restitution:1, friction:0, frictionAir:0, label:'ball'});
+              Matter.Body.setVelocity(b1, {x:-v.x-1, y:v.y});
+              Matter.Body.setVelocity(b2, {x:-v.x+1, y:v.y});
+              Matter.Composite.add(engine.world, [b1, b2]);
+              extra.push({body:b1, r:b.r, stuck:false}, {body:b2, r:b.r, stuck:false});
+            }
+          });
+          balls = balls.concat(extra);
+        }
+        else if (k==='slow'){ effects.slowUntil = performance.now()+7000; }
+        else if (k==='life'){ lives = Math.min(lives+1,5); }
+        updateHud();
+      }
+
+      function onBrickHit(br, ballBody){
+        if (!br.alive) return;
+        br.hp--;
+        combo++;
+        var mult = 1+Math.floor(combo/5);
+        score += 10*mult;
+        spawnBurst(br.x+br.w/2, br.y+br.h/2, br.hp<=0 ? R.yellow : R.dim, 8);
+        if (br.hp<=0){
+          br.alive = false;
+          removeBrickBody(br);
+          maybeDropPower(br.x+br.w/2, br.y+br.h/2);
+          hitFlashTimer = Math.max(hitFlashTimer, 0.5);
+        }
+        updateHud();
+      }
+
+      Matter.Events.on(engine, 'collisionStart', function(evt){
+        evt.pairs.forEach(function(pair){
+          var a = pair.bodyA, b = pair.bodyB;
+          var ballBody = a.label==='ball' ? a : (b.label==='ball' ? b : null);
+          if (!ballBody) return;
+          var other = ballBody===a ? b : a;
+          if (other.label==='paddle'){
+            var rel = Math.max(-1, Math.min(1, (ballBody.position.x-(paddle.x+paddle.w/2))/(paddle.w/2)));
+            var spd = Math.min(9, Matter.Vector.magnitude(ballBody.velocity)+0.15);
+            var ang = rel*(Math.PI/3);
+            Matter.Body.setVelocity(ballBody, {x: Math.sin(ang)*spd, y: -Math.abs(Math.cos(ang)*spd)});
+            Matter.Body.setPosition(ballBody, {x: ballBody.position.x, y: paddle.y-ballR-1});
             combo = 0;
             updateHud();
-          }
-          for (var i=0;i<bricks.length;i++){
-            var br = bricks[i];
-            if (!br.alive) continue;
-            if (b.x+b.r>br.x && b.x-b.r<br.x+br.w && b.y+b.r>br.y && b.y-b.r<br.y+br.h){
-              br.hp--;
-              combo++;
-              var mult = 1+Math.floor(combo/5);
-              score += 10*mult;
-              burst(b.x,b.y, br.hp<=0 ? R.yellow : R.dim, 8);
-              if (br.hp<=0){ br.alive=false; maybeDropPower(br.x+br.w/2, br.y+br.h/2); shake=Math.max(shake,3); }
-              var overlapX = Math.min(b.x+b.r-br.x, br.x+br.w-(b.x-b.r));
-              var overlapY = Math.min(b.y+b.r-br.y, br.y+br.h-(b.y-b.r));
-              if (overlapX<overlapY) b.vx*=-1; else b.vy*=-1;
-              updateHud();
-              break;
-            }
+          } else if (other.label==='wallTop'){
+            hitFlashTimer = Math.max(hitFlashTimer, 0.2);
+          } else if (other.brickRef){
+            onBrickHit(other.brickRef, ballBody);
           }
         });
-        balls = balls.filter(function(b){ return b.stuck || b.y < HHt+20; });
-        if (!balls.length){
-          lives--; combo=0;
-          if (lives<=0){
-            state = 'over';
-            t.reportScore('brick', score);
-            setTimeout(function(){ t.showOverlay('Game Over','Score '+score+' · Level '+level,'Play Again', function(){ t.hideOverlay(); reset(); }); },300);
-          } else {
-            resetBall();
+      });
+
+      function step(dt){
+        if (keyState['ArrowLeft']||keyState['a']) paddle.x = Math.max(0, paddle.x-7);
+        if (keyState['ArrowRight']||keyState['d']) paddle.x = Math.min(W-paddle.w, paddle.x+7);
+        Matter.Body.setPosition(paddleBody, {x: paddle.x+paddle.w/2, y: paddle.y+paddleH/2});
+
+        var now = performance.now();
+        if (now>effects.wideUntil && paddle.w!==paddleW0){ paddle.w = paddleW0; makePaddleBody(); }
+        engine.timing.timeScale = now<effects.slowUntil ? 0.6 : 1;
+
+        if (state==='playing'){
+          balls.forEach(function(b){
+            if (b.stuck) Matter.Body.setPosition(b.body, {x: paddle.x+paddle.w/2, y: paddle.y-10});
+          });
+          Matter.Engine.update(engine, Math.min(dt, 33));
+
+          balls = balls.filter(function(b){
+            if (b.stuck) return true;
+            if (b.body.position.y > HHt+20){ Matter.Composite.remove(engine.world, b.body); return false; }
+            return true;
+          });
+          if (!balls.length){
+            lives--; combo=0;
+            if (lives<=0){
+              state = 'over';
+              t.reportScore('brick', score);
+              setTimeout(function(){ t.showOverlay('Game Over','Score '+score+' · Level '+level,'Play Again', function(){ t.hideOverlay(); reset(); }); },300);
+            } else {
+              resetBall();
+            }
+            updateHud();
           }
-          updateHud();
+          if (bricks.length && bricks.every(function(b){return !b.alive;})){
+            level++;
+            score += 100;
+            layoutBricks();
+            resetBall();
+            updateHud();
+          }
         }
-        if (bricks.length && bricks.every(function(b){return !b.alive;})){
-          level++;
-          score += 100;
-          layoutBricks();
-          resetBall();
-          updateHud();
+
+        powerups.forEach(function(p){ p.y += p.vy; });
+        powerups = powerups.filter(function(p){
+          if (p.y>paddle.y-4 && p.y<paddle.y+paddleH && p.x>paddle.x && p.x<paddle.x+paddle.w){
+            applyPower(p.type);
+            spawnBurst(p.x,p.y,p.color,12);
+            return false;
+          }
+          return p.y < HHt+10;
+        });
+
+        if (hitFlashTimer>0) hitFlashTimer *= 0.85;
+      }
+
+      // ---------------- 3D rendering (Three.js) ----------------
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:360px;aspect-ratio:360/460;margin:0 auto';
+      el.appendChild(canvasWrap);
+
+      var VIEW_W = 360, VIEW_H = 460;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (canvasWrap.parentNode) canvasWrap.parentNode.removeChild(canvasWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0c0820, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0c0820, 500, 1400);
+
+      var camera = new THREE.PerspectiveCamera(48, VIEW_W/VIEW_H, 1, 2000);
+      camera.position.set(0, 440, 300);
+      camera.lookAt(0, 0, -40);
+
+      scene.add(new THREE.AmbientLight(0x8080ff, 0.55));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.1);
+      sun.position.set(80, 260, 140);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024,1024);
+      sun.shadow.camera.left = -260; sun.shadow.camera.right = 260;
+      sun.shadow.camera.top = 320; sun.shadow.camera.bottom = -320;
+      scene.add(sun);
+
+      function mapX(x){ return x - W/2; }
+      function mapZ(y){ return y - HHt/2; }
+
+      var tableGeo = new THREE.PlaneGeometry(W+40, HHt+40);
+      var tableMat = new THREE.MeshStandardMaterial({ color: 0x171233, roughness: 0.85, metalness: 0.05 });
+      var table = new THREE.Mesh(tableGeo, tableMat);
+      table.rotation.x = -Math.PI/2;
+      table.receiveShadow = true;
+      scene.add(table);
+
+      var RAIL_COLORS = [0x2FD3C7, 0xFF5DA2, 0xFFD166, 0x4DA6FF, 0x3DDC97, 0xFF6B4A];
+      var railSegH = (HHt+40)/RAIL_COLORS.length;
+      var railGeo = new THREE.BoxGeometry(6, 8, railSegH-2);
+      [-1,1].forEach(function(sign){
+        RAIL_COLORS.forEach(function(color, i){
+          var segMat = new THREE.MeshStandardMaterial({ color: 0x2b2158, emissive: color, emissiveIntensity: 0.55, roughness:0.5 });
+          var seg = new THREE.Mesh(railGeo, segMat);
+          seg.position.set(sign*(W/2+3), 4, -((HHt+40)/2) + railSegH*(i+0.5));
+          seg.castShadow = true; seg.receiveShadow = true;
+          scene.add(seg);
+        });
+      });
+
+      var CORNER_SHAPES = [
+        { geo: new THREE.OctahedronGeometry(9, 0), color: 0xFFD166, pos: [-1,-1] },
+        { geo: new THREE.ConeGeometry(8, 14, 4), color: 0xFF5DA2, pos: [1,-1] },
+        { geo: new THREE.TorusGeometry(7, 2.4, 8, 16), color: 0x4DA6FF, pos: [-1,1] },
+        { geo: new THREE.TetrahedronGeometry(9, 0), color: 0x3DDC97, pos: [1,1] }
+      ];
+      CORNER_SHAPES.forEach(function(s){
+        var mat = new THREE.MeshStandardMaterial({ color: s.color, emissive: s.color, emissiveIntensity: 0.35, roughness:0.35, metalness:0.2 });
+        var mesh = new THREE.Mesh(s.geo, mat);
+        mesh.position.set(s.pos[0]*(W/2-14), 9, s.pos[1]*(HHt/2-14));
+        mesh.rotation.y = Math.random()*Math.PI;
+        mesh.castShadow = true;
+        scene.add(mesh);
+      });
+
+      var paddleMat = new THREE.MeshStandardMaterial({ color: 0xE9FBF9, emissive: 0x113330, roughness:0.4 });
+      var paddleGeo = new THREE.BoxGeometry(paddleW0, 10, paddleDepth);
+      var paddleMesh = new THREE.Mesh(paddleGeo, paddleMat);
+      paddleMesh.castShadow = true;
+      scene.add(paddleMesh);
+      var paddleStripeMat = new THREE.MeshStandardMaterial({ color: 0xFF6B4A, emissive: 0xFF6B4A, emissiveIntensity: 0.6 });
+      var paddleStripe = new THREE.Mesh(new THREE.BoxGeometry(paddleW0-4, 2, 3), paddleStripeMat);
+      paddleMesh.add(paddleStripe);
+      paddleStripe.position.set(0, 5.5, 0);
+
+      var ballMat = new THREE.MeshStandardMaterial({ color: 0xFFD166, emissive: 0x4a3200, roughness:0.3, metalness:0.2 });
+      var ballGeo = new THREE.SphereGeometry(ballR, 16, 12);
+      var ballMeshes = [];
+      function syncBallMeshes(){
+        while (ballMeshes.length < balls.length){
+          var m = new THREE.Mesh(ballGeo, ballMat);
+          m.castShadow = true;
+          scene.add(m);
+          ballMeshes.push(m);
+        }
+        while (ballMeshes.length > balls.length){
+          var old = ballMeshes.pop();
+          scene.remove(old);
         }
       }
 
-      powerups.forEach(function(p){ p.y += p.vy; });
-      powerups = powerups.filter(function(p){
-        if (p.y>paddle.y-4 && p.y<paddle.y+paddleH && p.x>paddle.x && p.x<paddle.x+paddle.w){
-          applyPower(p.type);
-          burst(p.x,p.y,p.color,12);
-          return false;
-        }
-        return p.y < HHt+10;
-      });
-
-      particles.forEach(function(p){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=0.03; });
-      particles = particles.filter(function(p){return p.life>0;});
-      if (shake>0) shake *= 0.85;
-      if (flash>0) flash *= 0.85;
-    }
-
-    function draw(){
-      ctx.save();
-      var sx = (Math.random()-0.5)*shake, sy = (Math.random()-0.5)*shake;
-      ctx.translate(sx,sy);
-      ctx.fillStyle = R.bg; ctx.fillRect(-shake,-shake,W+shake*2,HHt+shake*2);
-
-      bricks.forEach(function(br){
-        if (!br.alive) return;
-        var frac = br.hp/br.maxhp;
-        ctx.fillStyle = br.maxhp>=3 ? R.magenta : br.maxhp===2 ? R.violet : R.teal;
-        ctx.globalAlpha = 0.5+0.5*frac;
-        L(ctx, br.x, br.y, br.w, br.h, 3); ctx.fill();
-        ctx.globalAlpha = 1;
-      });
-
-      powerups.forEach(function(p){
-        ctx.fillStyle = p.color;
-        L(ctx,p.x-8,p.y-8,16,16,4); ctx.fill();
-      });
-
-      ctx.fillStyle = R.ink;
-      L(ctx, paddle.x, paddle.y, paddle.w, paddleH, 6); ctx.fill();
-
-      balls.forEach(function(b){
-        var grad = ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r*2);
-        grad.addColorStop(0, R.yellow); grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath(); ctx.arc(b.x,b.y,b.r*2,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle = R.yellow;
-        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
-      });
-
-      particles.forEach(function(p){
-        ctx.globalAlpha = Math.max(p.life,0);
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x,p.y,2.5,0,Math.PI*2); ctx.fill();
-      });
-      ctx.globalAlpha = 1;
-
-      if (flash>0){ ctx.fillStyle = 'rgba(255,255,255,'+(flash*0.2)+')'; ctx.fillRect(0,0,W,HHt); }
-      ctx.restore();
-
-      if (state==='ready'){
-        ctx.fillStyle = R.dim; ctx.font = '13px system-ui,sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('Click or press Space to launch', W/2, HHt-50);
+      var BRICK_COLORS = { 1: 0x2FD3C7, 2: 0x8C7CF0, 3: 0xFF5DA2 };
+      var brickMeshes = {}; // keyed by brick object via a small counter id
+      var brickIdCounter = 0;
+      function brickId(br){ if (br.__id3d==null) br.__id3d = ++brickIdCounter; return br.__id3d; }
+      function syncBrickMeshes(){
+        var seen = {};
+        bricks.forEach(function(br){
+          if (!br.alive) return;
+          var id = brickId(br);
+          seen[id] = true;
+          var mesh = brickMeshes[id];
+          var h = 8 + 6*(br.hp/br.maxhp);
+          if (!mesh){
+            var mat = new THREE.MeshStandardMaterial({ color: BRICK_COLORS[br.maxhp]||BRICK_COLORS[1], emissive: BRICK_COLORS[br.maxhp]||BRICK_COLORS[1], emissiveIntensity: 0.25, roughness:0.5 });
+            var geo = new THREE.BoxGeometry(br.w, h, br.h);
+            mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            scene.add(mesh);
+            brickMeshes[id] = mesh;
+          }
+          mesh.position.set(mapX(br.x+br.w/2), h/2, mapZ(br.y+br.h/2));
+          mesh.material.opacity = 1;
+          var frac = br.hp/br.maxhp;
+          mesh.material.emissiveIntensity = 0.15+0.25*frac;
+        });
+        Object.keys(brickMeshes).forEach(function(id){
+          if (!seen[id]){
+            var mesh = brickMeshes[id];
+            scene.remove(mesh);
+            csaDisposeThree(mesh);
+            delete brickMeshes[id];
+          }
+        });
       }
-    }
 
-    function loop(ts){
-      if (!last) last = ts;
-      var dt = ts-last; last = ts;
-      step(dt);
-      draw();
+      var powerupGeo = new THREE.OctahedronGeometry(6, 0);
+      var powerupMeshes = [];
+      function syncPowerupMeshes(){
+        while (powerupMeshes.length < powerups.length){
+          var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5, roughness:0.3 });
+          var m = new THREE.Mesh(powerupGeo, mat);
+          m.castShadow = true;
+          scene.add(m);
+          powerupMeshes.push(m);
+        }
+        while (powerupMeshes.length > powerups.length){
+          var old = powerupMeshes.pop();
+          scene.remove(old);
+          csaDisposeThree(old);
+        }
+        powerups.forEach(function(p, i){
+          var m = powerupMeshes[i];
+          m.position.set(mapX(p.x), 10, mapZ(p.y));
+          m.rotation.y += 0.08;
+          m.material.color.set(p.color);
+          m.material.emissive.set(p.color);
+        });
+      }
+
+      var particleGeo = new THREE.SphereGeometry(2.2, 8, 6);
+      var particlePool = [];
+      function spawnBurst(x, y, color, n){
+        for (var i=0;i<(n||10);i++){
+          var mat = new THREE.MeshBasicMaterial({ color: color, transparent:true, opacity:1 });
+          var m = new THREE.Mesh(particleGeo, mat);
+          var a = Math.random()*Math.PI*2, sp = 0.6+Math.random()*2.2;
+          m.position.set(mapX(x), 10, mapZ(y));
+          m.userData = { vx: Math.cos(a)*sp, vz: Math.sin(a)*sp, vy: 1+Math.random(), life:1 };
+          scene.add(m);
+          particlePool.push(m);
+        }
+      }
+
+      function renderFrame(){
+        paddleMesh.position.set(mapX(paddle.x+paddle.w/2), 5, mapZ(paddle.y+paddleH/2));
+        paddleMesh.scale.x = paddle.w/paddleW0;
+        paddleStripe.scale.x = paddleW0/paddle.w;
+
+        syncBallMeshes();
+        balls.forEach(function(b, i){
+          var m = ballMeshes[i];
+          var pos = b.stuck ? {x: paddle.x+paddle.w/2, y: paddle.y-10} : b.body.position;
+          m.position.set(mapX(pos.x), ballR+1, mapZ(pos.y));
+          m.rotation.x += 0.1;
+        });
+
+        syncBrickMeshes();
+        syncPowerupMeshes();
+
+        particlePool = particlePool.filter(function(m){
+          m.userData.life -= 0.035;
+          m.position.x += m.userData.vx;
+          m.position.z += m.userData.vz;
+          m.userData.vy -= 0.06;
+          m.position.y = Math.max(2, m.position.y + m.userData.vy*0.5);
+          m.material.opacity = Math.max(0, m.userData.life);
+          if (m.userData.life <= 0){ scene.remove(m); m.material.dispose(); return false; }
+          return true;
+        });
+
+        renderer.render(scene, camera);
+      }
+
+      function loop(ts){
+        if (!last) last = ts;
+        var dt = ts-last; last = ts;
+        step(dt);
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
+
+      function movePaddleTo(px){ paddle.x = Math.max(0, Math.min(W-paddle.w, px-paddle.w/2)); }
+      function onMove(e){
+        var rect = renderer.domElement.getBoundingClientRect();
+        var cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        cx = cx * (VIEW_W/rect.width);
+        movePaddleTo(cx);
+      }
+      function onDown(){ launch(); }
+      renderer.domElement.addEventListener('mousemove', onMove);
+      renderer.domElement.addEventListener('touchmove', onMove, {passive:true});
+      renderer.domElement.addEventListener('mousedown', onDown);
+      renderer.domElement.addEventListener('touchstart', onDown, {passive:true});
+
+      var keyCleanup = H(function(e){ if (e.key===' ') launch(); keyState[e.key]=true; });
+      function onKeyUp(e){ keyState[e.key]=false; }
+      document.addEventListener('keyup', onKeyUp);
+
+      t.setHint('Move mouse or drag to steer the paddle · arrows/AD also work · click/space to launch — real physics, real 3D bricks');
+      reset();
       raf = requestAnimationFrame(loop);
+
+      return function(){
+        cancelAnimationFrame(raf);
+        keyCleanup();
+        document.removeEventListener('keyup', onKeyUp);
+        renderer.domElement.removeEventListener('mousemove', onMove);
+        renderer.domElement.removeEventListener('touchmove', onMove);
+        renderer.domElement.removeEventListener('mousedown', onDown);
+        renderer.domElement.removeEventListener('touchstart', onDown);
+        scene.traverse(csaDisposeThree);
+        particlePool.forEach(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (canvasWrap && canvasWrap.parentNode) canvasWrap.parentNode.removeChild(canvasWrap);
+      };
     }
 
-    function movePaddleTo(px){ paddle.x = Math.max(0, Math.min(W-paddle.w, px-paddle.w/2)); }
-    function onMove(e){
-      var rect = o.canvas.getBoundingClientRect();
-      var cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-      cx = cx * (W/rect.width);
-      movePaddleTo(cx);
-    }
-    function onDown(){ launch(); }
-    o.canvas.addEventListener('mousemove', onMove);
-    o.canvas.addEventListener('touchmove', onMove, {passive:true});
-    o.canvas.addEventListener('mousedown', onDown);
-    o.canvas.addEventListener('touchstart', onDown, {passive:true});
-
-    var keyCleanup = H(function(e){ if (e.key===' ') launch(); keyState[e.key]=true; });
-    function onKeyUp(e){ keyState[e.key]=false; }
-    document.addEventListener('keyup', onKeyUp);
-
-    t.setHint('Move mouse or drag to steer the paddle · arrows/AD also work · click/space to launch · catch power-ups');
-    reset();
-    raf = requestAnimationFrame(loop);
-
-    return function(){
-      cancelAnimationFrame(raf);
-      keyCleanup();
-      document.removeEventListener('keyup', onKeyUp);
-      o.canvas.removeEventListener('mousemove', onMove);
-      o.canvas.removeEventListener('touchmove', onMove);
-      o.canvas.removeEventListener('mousedown', onDown);
-      o.canvas.removeEventListener('touchstart', onDown);
-    };
+    return csa3DLoadGate(el, t, startGame);
   }
 },g.flap = {
   title: "Flap Coin",
