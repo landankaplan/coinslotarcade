@@ -4736,195 +4736,389 @@ g.derby = {
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="16" r="2.6"/><path d="M10 14l9-9M17 3l2 2"/></svg>',
   mount: function(el, t) {
-    var W = 340, H_ = 380;
-    var DIFFS = [
-      { name: "Easy", dur: 54, sweet: 16 },
-      { name: "Medium", dur: 42, sweet: 11 },
-      { name: "Hard", dur: 32, sweet: 7 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
+    function startGame3D(){
+      var DIFFS = [
+        { name: "Easy", dur: 54, sweet: 16 },
+        { name: "Medium", dur: 42, sweet: 11 },
+        { name: "Hard", dur: 32, sweet: 7 }
+      ];
+      var diffIdx = 1, mode = "1p";
 
-    var FENCE = 380;
-    var pitchesLeft, homers, streak, bestStreak, points, longest, totalDist, ball, swung, resultLabel, resultTimer, ballFlight, turn, p1Hr, p2Hr, particles, shake, raf;
+      var FENCE = 380;
+      var pitchesLeft, homers, streak, bestStreak, points, longest, totalDist, ball, swung, resultLabel, resultTimer, ballFlight, turn, p1Hr, p2Hr, particles, shake, raf, last;
 
-    function newMatch() { turn = 1; p1Hr = 0; p2Hr = 0; startInning(); }
-
-    function startInning() {
-      pitchesLeft = 10; homers = 0; streak = 0; bestStreak = 0; points = 0; longest = 0; totalDist = 0;
-      particles = []; shake = 0;
-      throwPitch();
-    }
-
-    function throwPitch() {
-      var d = DIFFS[diffIdx];
-      var pitchNum = 10 - pitchesLeft;
-      ball = { t: 0, dur: Math.max(20, d.dur - pitchNum * 0.6), done: false };
-      swung = false; resultLabel = null; ballFlight = null;
-      updateHud();
-    }
-
-    function updateHud() {
-      var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
-      t.setHud("HR<b>" + homers + "</b>" +
-        '<span style="margin-left:1rem">PITCH<b>' + (10 - pitchesLeft + 1) + "/10</b></span>" +
-        '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" + turnTag);
-    }
-
-    function burst(x, y, color, n, spread) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, sp = (0.6 + Math.random()) * (spread || 3);
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 1, color: color, r: 2 + Math.random() * 2 });
+      // ---- hit-flight physics: one Matter body drives the batted ball's
+      // height, gravity-shaped from the launch angle exactly like the other
+      // flight-arc games; depth travels linearly over the same fixed window ----
+      Matter.Resolver._restingThresh = 0.001;
+      var flightEngine = Matter.Engine.create();
+      flightEngine.gravity.x = 0; flightEngine.gravity.y = 1;
+      var flightBody = Matter.Bodies.circle(0, 0, 3, { frictionAir: 0, friction: 0, restitution: 0 });
+      Matter.Composite.add(flightEngine.world, flightBody);
+      var FLIGHT_DUR = 30;
+      function startFlight(angle) {
+        var arcWorld = Math.max(10, Math.abs(angle) * 130);
+        var grav = 8 * arcWorld / (FLIGHT_DUR * FLIGHT_DUR);
+        var vy0 = 4 * arcWorld / FLIGHT_DUR;
+        Matter.Body.setPosition(flightBody, { x: 0, y: 0 });
+        Matter.Body.setVelocity(flightBody, { x: 0, y: -vy0 });
+        flightEngine.gravity.y = grav;
       }
-    }
+      function stepFlight() {
+        Matter.Engine.update(flightEngine, 16.67);
+        return Math.max(0, -flightBody.position.y);
+      }
 
-    function swing() {
-      if (!ball || ball.done || swung) return;
-      swung = true;
-      var d = DIFFS[diffIdx];
-      var idealFrame = 0.72 * ball.dur;
-      var off = Math.abs(ball.t - idealFrame);
-      var quality = Math.max(0, 1 - off / d.sweet);
+      function newMatch() { turn = 1; p1Hr = 0; p2Hr = 0; startInning(); }
 
-      if (off < d.sweet) {
-        var distance = Math.round(Math.pow(quality, 1.4) * 430 + (Math.random() * 20 - 10));
-        var exitVelo = Math.round(72 + quality * 33);
-        ballFlight = { distance: distance, angle: -0.55 - quality * 0.3, homerun: distance >= FENCE };
-        if (ballFlight.homerun) {
-          homers++; streak++; bestStreak = Math.max(bestStreak, streak);
-          totalDist += distance; longest = Math.max(longest, distance);
-          points += 300 + distance + streak * 15;
-          resultLabel = { text: "HOME RUN! " + distance + " ft", color: R.green };
-          shake = 10; burst(170, 160, R.yellow, 30, 5);
+      function startInning() {
+        pitchesLeft = 10; homers = 0; streak = 0; bestStreak = 0; points = 0; longest = 0; totalDist = 0;
+        particles = []; shake = 0;
+        throwPitch();
+      }
+
+      function throwPitch() {
+        var d = DIFFS[diffIdx];
+        var pitchNum = 10 - pitchesLeft;
+        ball = { t: 0, dur: Math.max(20, d.dur - pitchNum * 0.6), done: false };
+        swung = false; resultLabel = null; ballFlight = null;
+        updateHud();
+      }
+
+      function updateHud() {
+        var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
+        t.setHud("HR<b>" + homers + "</b>" +
+          '<span style="margin-left:1rem">PITCH<b>' + (10 - pitchesLeft + 1) + "/10</b></span>" +
+          '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" + turnTag);
+      }
+
+      function burst(wx, wy, wz, colorHex, n, spread) {
+        var c = new THREE.Color(colorHex);
+        for (var i = 0; i < n; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1 });
+          var m = new THREE.Mesh(new THREE.SphereGeometry(1.8, 6, 6), mat);
+          m.position.set(wx, wy, wz);
+          var a = Math.random() * Math.PI * 2, sp = (0.6 + Math.random()) * (spread || 3);
+          scene.add(m);
+          particles.push({ mesh: m, vx: Math.cos(a) * sp, vy: Math.random() * sp, vz: Math.sin(a) * sp, life: 1 });
+        }
+      }
+
+      function swing() {
+        if (!ball || ball.done || swung) return;
+        swung = true;
+        triggerSwing();
+        var d = DIFFS[diffIdx];
+        var idealFrame = 0.72 * ball.dur;
+        var off = Math.abs(ball.t - idealFrame);
+        var quality = Math.max(0, 1 - off / d.sweet);
+
+        if (off < d.sweet) {
+          var distance = Math.round(Math.pow(quality, 1.4) * 430 + (Math.random() * 20 - 10));
+          var exitVelo = Math.round(72 + quality * 33);
+          var angle = -0.55 - quality * 0.3;
+          ballFlight = { distance: distance, angle: angle, homerun: distance >= FENCE };
+          startFlight(angle);
+          if (ballFlight.homerun) {
+            homers++; streak++; bestStreak = Math.max(bestStreak, streak);
+            totalDist += distance; longest = Math.max(longest, distance);
+            points += 300 + distance + streak * 15;
+            resultLabel = { text: "HOME RUN! " + distance + " ft", color: R.green };
+            shake = 10; burst(0, 50, PLATE_Z - 60, R.yellow, 30, 5);
+          } else {
+            streak = 0;
+            resultLabel = { text: (distance > 250 ? "WARNING TRACK — OUT" : distance > 140 ? "FLY OUT" : "GROUND OUT") + " (" + distance + " ft, " + exitVelo + " mph)", color: R.coral };
+            burst(0, 4, PLATE_Z - distance * 0.6, R.dim, 10, 2.5);
+          }
+        } else if (off < 2.4 * d.sweet) {
+          streak = 0;
+          resultLabel = { text: "Foul ball", color: R.yellow };
+          burst(14, 20, PLATE_Z - 20, R.yellow, 6, 2);
         } else {
           streak = 0;
-          resultLabel = { text: (distance > 250 ? "WARNING TRACK — OUT" : distance > 140 ? "FLY OUT" : "GROUND OUT") + " (" + distance + " ft, " + exitVelo + " mph)", color: R.coral };
-          burst(170, 300, R.dim, 10, 2.5);
+          resultLabel = { text: "Whiff!", color: R.coral };
         }
-      } else if (off < 2.4 * d.sweet) {
-        streak = 0;
-        resultLabel = { text: "Foul ball", color: R.yellow };
-        burst(170, 300, R.dim, 6, 2);
-      } else {
-        streak = 0;
-        resultLabel = { text: "Whiff!", color: R.coral };
-      }
-      updateHud();
-      ball.done = true;
-      resultTimer = 0;
-    }
-
-    function pitchOver() {
-      if (!swung) { resultLabel = { text: "Ball", color: R.dim }; }
-      pitchesLeft--;
-      updateHud();
-      if (pitchesLeft <= 0) { setTimeout(finishInning, 900); }
-      else { setTimeout(throwPitch, 900); }
-    }
-
-    function finishInning() {
-      if (mode === "1p") {
-        t.reportScore("derby", points);
-        t.showOverlay("Derby over", "Hit " + homers + " home runs · best streak " + bestStreak + (longest ? " · longest " + longest + " ft" : ""), "Play again", startInning);
-      } else if (turn === 1) {
-        p1Hr = homers; turn = 2;
-        t.showOverlay("Player 1 done!", "P1 hit " + p1Hr + " homers — pass the device to Player 2", "Start P2", startInning);
-      } else {
-        p2Hr = homers;
-        var win = p1Hr === p2Hr ? "Draw!" : (p1Hr > p2Hr ? "Player 1 wins!" : "Player 2 wins!");
-        t.reportScore("derby", 150 * Math.max(p1Hr, p2Hr));
-        t.showOverlay(win, "P1: " + p1Hr + " · P2: " + p2Hr, "Play again", newMatch);
-      }
-    }
-
-    o.canvas.addEventListener("pointerdown", swing);
-    var keyCleanup = H(function (e) { if (e.key === " ") { e.preventDefault(); swing(); } });
-
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">PITCH SPEED</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
-    }
-    renderOpts();
-    newMatch();
-
-    function draw() {
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      var sy = shake > 0 ? (Math.random() - 0.5) * shake * 0.5 : 0;
-      ctx.save(); ctx.translate(sx, sy);
-      ctx.fillStyle = R.bg; ctx.fillRect(-10, -10, W + 20, H_ + 20);
-      ctx.fillStyle = "#1c4a3a";
-      ctx.beginPath(); ctx.moveTo(170, 320); ctx.lineTo(30, 60); ctx.lineTo(310, 60); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#fdfdfb"; L(ctx, 156, 314, 28, 20, 4); ctx.fill();
-
-      if (ball && !ball.done) {
-        var tt = Math.min(1, ball.t / ball.dur);
-        var bx = 170 + 4 * Math.sin(0.15 * ball.t);
-        var by = 60 + 254 * tt;
-        var br = 5 + 4 * tt;
-        ctx.fillStyle = "#fdfdfb"; ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = R.coral; ctx.lineWidth = 1; ctx.stroke();
-      } else if (ballFlight && resultTimer !== undefined && resultTimer < 30) {
-        var ft = resultTimer / 30;
-        var fx = 170 + Math.sin(ballFlight.angle) * ballFlight.distance * 0.4 * ft;
-        var fy = 300 + ballFlight.angle * 260 * ft + 260 * ft * ft * 0.5;
-        ctx.fillStyle = "#fdfdfb"; ctx.beginPath(); ctx.arc(fx, Math.min(300, fy), 5, 0, Math.PI * 2); ctx.fill();
+        updateHud();
+        ball.done = true;
+        resultTimer = 0;
       }
 
-      if (resultLabel) {
-        ctx.fillStyle = resultLabel.color;
-        ctx.font = "700 16px Baloo 2, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(resultLabel.text, 170, 180);
-      } else {
-        ctx.fillStyle = R.ink;
-        ctx.font = "700 12px Baloo 2, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("Click / Space to swing", 170, 344);
-      }
-      if (streak >= 2) {
-        ctx.fillStyle = R.yellow;
-        ctx.font = "700 12px Baloo 2, sans-serif";
-        ctx.fillText("ON FIRE x" + streak, 170, 200);
+      function pitchOver() {
+        if (!swung) { resultLabel = { text: "Ball", color: R.dim }; }
+        pitchesLeft--;
+        updateHud();
+        if (pitchesLeft <= 0) { setTimeout(finishInning, 900); }
+        else { setTimeout(throwPitch, 900); }
       }
 
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.14; p.life -= 0.026; });
-      particles = particles.filter(function (p) { return p.life > 0; });
-      particles.forEach(function (p) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill(); });
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-
-    raf = requestAnimationFrame(function loop() {
-      if (ball && !ball.done) {
-        ball.t++;
-        if (ball.t > ball.dur + 6) { ball.done = true; pitchOver(); }
-      } else if (ball && ball.done && resultTimer !== undefined) {
-        resultTimer++;
-        if (resultTimer > 34 && !ball.advanced) { ball.advanced = true; pitchOver(); }
+      function finishInning() {
+        if (mode === "1p") {
+          t.reportScore("derby", points);
+          t.showOverlay("Derby over", "Hit " + homers + " home runs · best streak " + bestStreak + (longest ? " · longest " + longest + " ft" : ""), "Play again", startInning);
+        } else if (turn === 1) {
+          p1Hr = homers; turn = 2;
+          t.showOverlay("Player 1 done!", "P1 hit " + p1Hr + " homers — pass the device to Player 2", "Start P2", startInning);
+        } else {
+          p2Hr = homers;
+          var win = p1Hr === p2Hr ? "Draw!" : (p1Hr > p2Hr ? "Player 1 wins!" : "Player 2 wins!");
+          t.reportScore("derby", 150 * Math.max(p1Hr, p2Hr));
+          t.showOverlay(win, "P1: " + p1Hr + " · P2: " + p2Hr, "Play again", newMatch);
+        }
       }
-      if (shake > 0) { shake *= 0.85; if (shake < 0.3) shake = 0; }
-      draw();
+
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
+
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">PITCH SPEED</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+      }
+      renderOpts();
+
+      // ---------------- 3D rendering ----------------
+      var PLATE_Z = 150, MOUND_Z = -180;
+
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:340px;aspect-ratio:340/380;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var VIEW_W = 340, VIEW_H = 380;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0a1a12, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0a1a12, 420, 1100);
+
+      var camera = new THREE.PerspectiveCamera(64, VIEW_W / VIEW_H, 1, 1800);
+      camera.position.set(0, 70, 260);
+      camera.lookAt(0, 45, -200);
+
+      scene.add(new THREE.AmbientLight(0xcdf5d8, 0.6));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.1);
+      sun.position.set(100, 280, 160);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024, 1024);
+      scene.add(sun);
+
+      var grass = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color: 0x1c4a30, roughness: 0.95 }));
+      grass.rotation.x = -Math.PI / 2;
+      grass.position.set(0, 0, -100);
+      grass.receiveShadow = true;
+      scene.add(grass);
+
+      var dirt = new THREE.Mesh(new THREE.CircleGeometry(60, 24), new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.95 }));
+      dirt.rotation.x = -Math.PI / 2;
+      dirt.position.set(0, 0.05, PLATE_Z - 10);
+      scene.add(dirt);
+      var plate = new THREE.Mesh(new THREE.BoxGeometry(14, 1.2, 14), new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.5 }));
+      plate.position.set(0, 0.6, PLATE_Z);
+      scene.add(plate);
+
+      // outfield fence at the home-run threshold distance
+      var fenceGeom = new THREE.BoxGeometry(620, 26, 4);
+      var fenceMat = new THREE.MeshStandardMaterial({ color: 0x1a3a2a, roughness: 0.85 });
+      var fence = new THREE.Mesh(fenceGeom, fenceMat);
+      fence.position.set(0, 13, PLATE_Z - FENCE);
+      scene.add(fence);
+      var fenceTop = new THREE.Mesh(new THREE.BoxGeometry(620, 2, 4), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+      fenceTop.position.set(0, 26, PLATE_Z - FENCE);
+      scene.add(fenceTop);
+
+      // ---- batter figure ----
+      function makeBatter(bodyColor, skinColor) {
+        var grp = new THREE.Group();
+        var legs = new THREE.Mesh(new THREE.CylinderGeometry(6, 7, 18, 8), new THREE.MeshStandardMaterial({ color: 0x24324a, roughness: 0.8 }));
+        legs.position.y = 9;
+        legs.castShadow = true;
+        grp.add(legs);
+        var torso = new THREE.Mesh(new THREE.BoxGeometry(16, 21, 10), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        torso.position.y = 28.5;
+        torso.castShadow = true;
+        grp.add(torso);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(6.4, 14, 10), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 }));
+        head.position.y = 43;
+        head.castShadow = true;
+        grp.add(head);
+
+        var batPivot = new THREE.Group();
+        batPivot.position.set(10, 34, -2);
+        grp.add(batPivot);
+        var armL = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.3, 13, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 }));
+        armL.rotation.z = 0.5;
+        armL.position.set(-4, -2, 0);
+        batPivot.add(armL);
+        var bat = new THREE.Mesh(new THREE.CylinderGeometry(1, 2.6, 30, 10), new THREE.MeshStandardMaterial({ color: 0xc89a5c, roughness: 0.5 }));
+        bat.position.set(2, 10, 0);
+        bat.rotation.z = -0.35;
+        batPivot.add(bat);
+
+        return { group: grp, batPivot: batPivot, restRot: 0.3, swinging: false, swingT: 0 };
+      }
+
+      var batter = makeBatter(new THREE.Color(R.orange), 0xE8B48C);
+      batter.group.position.set(-22, 0, PLATE_Z + 6);
+      batter.group.rotation.y = -0.5;
+      batter.batPivot.rotation.z = batter.restRot;
+      scene.add(batter.group);
+
+      var SWING_DUR = 12;
+      function triggerSwing() { batter.swinging = true; batter.swingT = 0; }
+      function stepSwing() {
+        if (batter.swinging) {
+          batter.swingT++;
+          var u = batter.swingT / SWING_DUR;
+          if (u >= 1) { batter.swinging = false; batter.batPivot.rotation.y = 0; }
+          else {
+            var s = Math.sin(u * Math.PI);
+            batter.batPivot.rotation.y = -s * 2.2;
+          }
+        }
+      }
+
+      // ---- ball ----
+      function makeBallTexture() {
+        var c = document.createElement('canvas'); c.width = 128; c.height = 128;
+        var cx = c.getContext('2d');
+        cx.fillStyle = '#fdfdfb'; cx.fillRect(0, 0, 128, 128);
+        cx.strokeStyle = '#d8453a'; cx.lineWidth = 3;
+        cx.beginPath(); cx.moveTo(10, 40); cx.quadraticCurveTo(64, 70, 18, 118); cx.stroke();
+        cx.beginPath(); cx.moveTo(118, 40); cx.quadraticCurveTo(64, 70, 110, 118); cx.stroke();
+        return new THREE.CanvasTexture(c);
+      }
+      var ballTex = makeBallTexture();
+      var BALL_R = 4.6;
+      var ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 14, 10), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.6 }));
+      ballMesh.castShadow = true;
+      scene.add(ballMesh);
+      var ballShadow = new THREE.Mesh(new THREE.CircleGeometry(5, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 }));
+      ballShadow.rotation.x = -Math.PI / 2;
+      ballShadow.position.y = 0.15;
+      scene.add(ballShadow);
+
+      function stepParticles() {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.vy -= 0.14;
+          p.mesh.position.x += p.vx * 0.5; p.mesh.position.y += p.vy * 0.5; p.mesh.position.z += p.vz * 0.5;
+          p.life -= 0.026;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i, 1); }
+        }
+      }
+
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:absolute;top:30%;left:50%;transform:translateX(-50%);font:700 16px "Baloo 2",sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.6);pointer-events:none;opacity:0;transition:opacity .15s;text-align:center;width:90%';
+      canvasWrap.appendChild(toast);
+      var streakToast = document.createElement('div');
+      streakToast.style.cssText = 'position:absolute;top:18%;left:50%;transform:translateX(-50%);font:700 13px "Baloo 2",sans-serif;color:' + R.yellow + ';text-shadow:0 2px 6px rgba(0,0,0,.6);pointer-events:none';
+      canvasWrap.appendChild(streakToast);
+      var hintToast = document.createElement('div');
+      hintToast.style.cssText = 'position:absolute;bottom:6%;left:50%;transform:translateX(-50%);font:700 11px "Baloo 2",sans-serif;color:' + R.ink + ';text-shadow:0 2px 6px rgba(0,0,0,.6);pointer-events:none;opacity:.8';
+      hintToast.textContent = "Click / Space to swing";
+      canvasWrap.appendChild(hintToast);
+
+      function swingHandler() { swing(); }
+      renderer.domElement.addEventListener("pointerdown", swingHandler);
+      var keyCleanup = H(function (e) { if (e.key === " ") { e.preventDefault(); swing(); } });
+
+      renderOpts();
+      newMatch();
+
+      function renderFrame() {
+        stepSwing();
+
+        if (ball && !ball.done) {
+          var tt = Math.min(1, ball.t / ball.dur);
+          var wx = 4 * Math.sin(0.15 * ball.t) * 0.6;
+          var wz = MOUND_Z + (PLATE_Z - MOUND_Z) * tt;
+          ballMesh.position.set(wx, 42, wz);
+          ballMesh.visible = true;
+          ballShadow.visible = false;
+        } else if (ballFlight && resultTimer !== undefined && resultTimer < FLIGHT_DUR) {
+          var h = stepFlight();
+          var ft = resultTimer / FLIGHT_DUR;
+          var fz = PLATE_Z - ballFlight.distance * ft;
+          var fx = Math.sign(ballFlight.angle) * 0 + 6 * Math.sin(ft * Math.PI) * (ballFlight.homerun ? 1 : 0.4);
+          ballMesh.position.set(fx, h + BALL_R, fz);
+          ballMesh.visible = true;
+          ballShadow.position.set(fx, 0.15, fz);
+          ballShadow.visible = true;
+          var shrink = Math.max(0.2, 1 - h / 120);
+          ballShadow.scale.set(shrink, shrink, shrink);
+        } else {
+          ballMesh.visible = false;
+          ballShadow.visible = false;
+        }
+
+        if (resultLabel) {
+          toast.textContent = resultLabel.text;
+          toast.style.color = resultLabel.color;
+          toast.style.opacity = 1;
+        } else {
+          toast.style.opacity = 0;
+        }
+        streakToast.textContent = streak >= 2 ? ("ON FIRE x" + streak) : "";
+
+        stepParticles();
+
+        var sx = 0;
+        if (shake > 0) { sx = (Math.random() - 0.5) * shake; shake *= 0.85; if (shake < 0.3) shake = 0; }
+        camera.position.set(sx, 70, 260);
+        camera.lookAt(0, 45, -200);
+
+        renderer.render(scene, camera);
+      }
+
+      function stepLogic() {
+        if (ball && !ball.done) {
+          ball.t++;
+          if (ball.t > ball.dur + 6) { ball.done = true; pitchOver(); }
+        } else if (ball && ball.done && resultTimer !== undefined) {
+          resultTimer++;
+          if (resultTimer > 34 && !ball.advanced) { ball.advanced = true; pitchOver(); }
+        }
+      }
+
+      function loop(ts) {
+        if (!last) last = ts;
+        last = ts;
+        stepLogic();
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
       raf = requestAnimationFrame(loop);
-    });
 
-    return function () {
-      cancelAnimationFrame(raf);
-      o.canvas.removeEventListener("pointerdown", swing);
-      keyCleanup();
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+      return function () {
+        cancelAnimationFrame(raf);
+        renderer.domElement.removeEventListener("pointerdown", swingHandler);
+        keyCleanup();
+        particles.forEach(function (p) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+        Matter.Composite.remove(flightEngine.world, flightBody);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
+    }
+
+    return csa3DLoadGate(el, t, startGame3D);
   }
-},g.bowling = {
+},
+g.bowling = {
   title: "Lane Bowling",
   tagline: "Drag to aim and set speed, roll strikes and spares across three frames.",
   color: R.violet,
