@@ -3170,137 +3170,296 @@ g.airhockey = {
   hint: "Drag/touch your mallet · P2 uses WASD in 2 Player",
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="6.5" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/></svg>',
-  mount: function(el, t) {
-    var W = 300, H_ = 460;
-    var DIFFS = [
-      { name: "Easy", speed: 2.7, error: 40, reaction: 0.10 },
-      { name: "Medium", speed: 4.0, error: 20, reaction: 0.16 },
-      { name: "Hard", speed: 5.6, error: 6, reaction: 0.26 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
-    var MALLET_R = 16, PUCK_R = 11, GOAL_HALF = 45;
+  mount: function (el, t) {
+    function startGame3D(){
+      var W = 300, H_ = 460;
+      var DIFFS = [
+        { name: "Easy", speed: 2.7, error: 40, reaction: 0.10 },
+        { name: "Medium", speed: 4.0, error: 20, reaction: 0.16 },
+        { name: "Hard", speed: 5.6, error: 6, reaction: 0.26 }
+      ];
+      var diffIdx = 1, mode = "1p";
+      var MALLET_R = 16, PUCK_R = 11, GOAL_HALF = 45;
 
-    var player, cpu, puck, prevCpu, prevPlayer, playerScore, cpuScore, running, particles, shake, speedMul, streak, raf;
-    var keys = { up: false, down: false, left: false, right: false };
+      var player, cpu, puck, prevCpu, prevPlayer, playerScore, cpuScore, running, shake, speedMul, streak, raf, last;
+      var keys = { up: false, down: false, left: false, right: false };
 
-    function reset() {
-      player = { x: 150, y: 410 };
-      cpu = { x: 150, y: 50 };
-      prevCpu = { x: 150, y: 50 };
-      prevPlayer = { x: 150, y: 410 };
-      cpuScore = 0; playerScore = 0; running = true; particles = []; shake = 0; speedMul = 1; streak = { who: null, n: 0 };
-      serve(1);
-      updateHud();
-    }
+      Matter.Resolver._restingThresh = 0.001;
+      var engine = Matter.Engine.create();
+      engine.gravity.x = 0; engine.gravity.y = 0;
 
-    function serve(dir) {
-      puck = { x: 150, y: 230, r: PUCK_R, vx: 1.6 * (2 * Math.random() - 1), vy: 2.6 * (dir || 1), trail: [] };
-    }
+      var puckBody = Matter.Bodies.circle(150, 230, PUCK_R, { frictionAir: 0.0025, friction: 0, restitution: 0.96, mass: 0.6, label: 'puck' });
+      var cpuBody = Matter.Bodies.circle(150, 50, MALLET_R, { frictionAir: 0, friction: 0, restitution: 0.96, mass: 3, inertia: Infinity, label: 'cpuMallet' });
+      var playerBody = Matter.Bodies.circle(150, 410, MALLET_R, { frictionAir: 0, friction: 0, restitution: 0.96, mass: 3, inertia: Infinity, label: 'playerMallet' });
+      var wallL = Matter.Bodies.rectangle(-6, 230, 12, H_ + 40, { isStatic: true, restitution: 1 });
+      var wallR = Matter.Bodies.rectangle(W + 6, 230, 12, H_ + 40, { isStatic: true, restitution: 1 });
+      Matter.Composite.add(engine.world, [puckBody, cpuBody, playerBody, wallL, wallR]);
 
-    function updateHud() {
-      var topLabel = mode === "1p" ? "CPU" : "P1";
-      t.setHud(topLabel + "<b>" + cpuScore + "</b>" + '<span style="margin-left:1rem">YOU<b>' + playerScore + "</b></span>" +
-        (streak.n >= 2 ? '<span style="margin-left:1rem;color:' + R.yellow + '">x' + streak.n + " RUN</span>" : ""));
-    }
+      Matter.Events.on(engine, 'collisionStart', function (evt) {
+        evt.pairs.forEach(function (pair) {
+          var a = pair.bodyA, b = pair.bodyB;
+          var isPuckMallet = (a === puckBody && (b === cpuBody || b === playerBody)) || (b === puckBody && (a === cpuBody || a === playerBody));
+          if (isPuckMallet) {
+            var sp = Math.hypot(puckBody.velocity.x, puckBody.velocity.y);
+            if (sp > 4) { shake = Math.min(6, sp * 0.5); burst(puckBody.position.x, puckBody.position.y, "#1b1033", 6); }
+          }
+        });
+      });
 
-    function burst(x, y, color, n) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 4;
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color: color });
+      function reset() {
+        player = { x: 150, y: 410 };
+        cpu = { x: 150, y: 50 };
+        prevCpu = { x: 150, y: 50 };
+        prevPlayer = { x: 150, y: 410 };
+        Matter.Body.setPosition(playerBody, player); Matter.Body.setVelocity(playerBody, {x:0,y:0});
+        Matter.Body.setPosition(cpuBody, cpu); Matter.Body.setVelocity(cpuBody, {x:0,y:0});
+        cpuScore = 0; playerScore = 0; running = true; shake = 0; speedMul = 1; streak = { who: null, n: 0 };
+        serve(1);
+        updateHud();
       }
-    }
 
-    function goalScored(scorerIsPlayer) {
-      running = false;
-      if (scorerIsPlayer) { playerScore++; streak = streak.who === "p" ? { who: "p", n: streak.n + 1 } : { who: "p", n: 1 }; }
-      else { cpuScore++; streak = streak.who === "c" ? { who: "c", n: streak.n + 1 } : { who: "c", n: 1 }; }
-      speedMul = Math.min(1.6, speedMul + 0.06);
-      shake = 10;
-      burst(puck.x, puck.y, scorerIsPlayer ? R.orange : R.coral, 24);
-      updateHud();
-      if (playerScore >= 7 || cpuScore >= 7) {
-        var won = playerScore >= 7;
-        if (mode === "1p") {
-          t.reportScore("airhockey", 100 * playerScore + Math.max(0, playerScore - cpuScore) * 10);
-          t.showOverlay(won ? "You win!" : "CPU wins", "Final " + playerScore + " - " + cpuScore, "Play again", reset);
-        } else {
-          t.reportScore("airhockey", 100 * Math.max(playerScore, cpuScore));
-          t.showOverlay(won ? "Bottom wins!" : "Top wins!", "Final Top " + cpuScore + " - Bottom " + playerScore, "Play again", reset);
+      function serve(dir) {
+        puck = { r: PUCK_R };
+        Matter.Body.setPosition(puckBody, { x: 150, y: 230 });
+        Matter.Body.setVelocity(puckBody, { x: 1.6 * (2 * Math.random() - 1) * speedMul, y: 2.6 * (dir || 1) * speedMul });
+      }
+
+      function updateHud() {
+        var topLabel = mode === "1p" ? "CPU" : "P1";
+        t.setHud(topLabel + "<b>" + cpuScore + "</b>" + '<span style="margin-left:1rem">YOU<b>' + playerScore + "</b></span>" +
+          (streak.n >= 2 ? '<span style="margin-left:1rem;color:#FFD23F">x' + streak.n + " RUN</span>" : ""));
+      }
+
+      function goalScored(scorerIsPlayer) {
+        running = false;
+        if (scorerIsPlayer) { playerScore++; streak = streak.who === "p" ? { who: "p", n: streak.n + 1 } : { who: "p", n: 1 }; }
+        else { cpuScore++; streak = streak.who === "c" ? { who: "c", n: streak.n + 1 } : { who: "c", n: 1 }; }
+        speedMul = Math.min(1.6, speedMul + 0.06);
+        shake = 10;
+        burst(puckBody.position.x, puckBody.position.y, scorerIsPlayer ? "#FF9F45" : "#FF6B6B", 24);
+        updateHud();
+        if (playerScore >= 7 || cpuScore >= 7) {
+          var won = playerScore >= 7;
+          if (mode === "1p") {
+            t.reportScore("airhockey", 100 * playerScore + Math.max(0, playerScore - cpuScore) * 10);
+            t.showOverlay(won ? "You win!" : "CPU wins", "Final " + playerScore + " - " + cpuScore, "Play again", reset);
+          } else {
+            t.reportScore("airhockey", 100 * Math.max(playerScore, cpuScore));
+            t.showOverlay(won ? "Bottom wins!" : "Top wins!", "Final Top " + cpuScore + " - Bottom " + playerScore, "Play again", reset);
+          }
+          return;
         }
-        return;
+        setTimeout(function () { serve(scorerIsPlayer ? -1 : 1); running = true; }, 700);
       }
-      setTimeout(function () { serve(scorerIsPlayer ? -1 : 1); running = true; }, 700);
-    }
 
-    function clampToLocal(pt, x, y) {
-      pt.x = Math.max(20, Math.min(280, x));
-      pt.y = Math.max(250, Math.min(440, y));
-    }
+      function setPlayerPos(clientX, clientY) {
+        var rect = renderer.domElement.getBoundingClientRect();
+        var x = (clientX - rect.left) * (W / rect.width);
+        var y = (clientY - rect.top) * (H_ / rect.height);
+        player.x = Math.max(20, Math.min(280, x));
+        player.y = Math.max(250, Math.min(440, y));
+      }
+      function onPointerMove(e) { setPlayerPos(e.clientX, e.clientY); }
+      function onTouchMove(e) { if (e.touches[0]) { setPlayerPos(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }
+      function onKeyUp(e) {
+        if (e.key === "w" || e.key === "W") keys.up = false;
+        else if (e.key === "s" || e.key === "S") keys.down = false;
+        else if (e.key === "a" || e.key === "A") keys.left = false;
+        else if (e.key === "d" || e.key === "D") keys.right = false;
+      }
 
-    function setPlayerPos(clientX, clientY) {
-      var rect = o.canvas.getBoundingClientRect();
-      var x = (clientX - rect.left) * (W / rect.width);
-      var y = (clientY - rect.top) * (H_ / rect.height);
-      player.x = Math.max(20, Math.min(280, x));
-      player.y = Math.max(250, Math.min(440, y));
-    }
-    function onPointerMove(e) { setPlayerPos(e.clientX, e.clientY); }
-    function onTouchMove(e) { if (e.touches[0]) { setPlayerPos(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); } }
-    function onKeyUp(e) {
-      if (e.key === "w" || e.key === "W") keys.up = false;
-      else if (e.key === "s" || e.key === "S") keys.down = false;
-      else if (e.key === "a" || e.key === "A") keys.left = false;
-      else if (e.key === "d" || e.key === "D") keys.right = false;
-    }
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
 
-    o.canvas.addEventListener("pointermove", onPointerMove);
-    o.canvas.addEventListener("touchmove", onTouchMove, { passive: false });
-    var keyCleanup = H(function (e) {
-      if (mode !== "2p") return;
-      if (e.key === "w" || e.key === "W") { e.preventDefault(); keys.up = true; }
-      else if (e.key === "s" || e.key === "S") { e.preventDefault(); keys.down = true; }
-      else if (e.key === "a" || e.key === "A") { e.preventDefault(); keys.left = true; }
-      else if (e.key === "d" || e.key === "D") { e.preventDefault(); keys.right = true; }
-    });
-    document.addEventListener("keyup", onKeyUp);
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+      }
+      renderOpts();
 
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
-    }
-    renderOpts();
-    reset();
+      // ---------------- 3D rendering ----------------
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:300px;aspect-ratio:300/460;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
 
-    // predicts where the puck will cross a given y, accounting for wall bounces
-    function predictX(atY) {
-      if (puck.vy === 0) return puck.x;
-      var t0 = (atY - puck.y) / puck.vy;
-      if (t0 < 0) return null;
-      var x = puck.x + puck.vx * t0;
-      var span = W - 0;
-      x = x % (2 * span);
-      if (x < 0) x += 2 * span;
-      if (x > span) x = 2 * span - x;
-      return x;
-    }
+      var VIEW_W = 300, VIEW_H = 460;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0a1420, 1);
+      canvasWrap.appendChild(renderer.domElement);
 
-    raf = requestAnimationFrame(function loop() {
-      if (running) {
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0a1420, 500, 1200);
+
+      var camera = new THREE.PerspectiveCamera(56, VIEW_W/VIEW_H, 1, 2000);
+      camera.position.set(0, 430, 230);
+      camera.lookAt(0, 0, -30);
+
+      scene.add(new THREE.AmbientLight(0xbfe8ff, 0.6));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.05);
+      sun.position.set(60, 320, 140);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024,1024);
+      scene.add(sun);
+
+      function mapX(x){ return x - 150; }
+      function mapZ(y){ return y - 230; }
+
+      var table = new THREE.Mesh(new THREE.PlaneGeometry(W, H_), new THREE.MeshStandardMaterial({ color: 0xBFE9FF, roughness: 0.35, metalness: 0.1 }));
+      table.rotation.x = -Math.PI/2;
+      table.receiveShadow = true;
+      scene.add(table);
+
+      var railMat = new THREE.MeshStandardMaterial({ color: 0x1b2a3a, roughness: 0.6 });
+      var railL = new THREE.Mesh(new THREE.BoxGeometry(10, 14, H_ + 20), railMat);
+      railL.position.set(-W/2 - 5, 6, 0);
+      railL.castShadow = true;
+      scene.add(railL);
+      var railR = railL.clone(); railR.position.set(W/2 + 5, 6, 0); scene.add(railR);
+
+      function makeEndRail(zPos) {
+        var segW = (W - GOAL_HALF*2) / 2;
+        var segMat = railMat;
+        var left = new THREE.Mesh(new THREE.BoxGeometry(segW, 14, 10), segMat);
+        left.position.set(-W/2 + segW/2, 6, zPos);
+        left.castShadow = true;
+        scene.add(left);
+        var right = left.clone();
+        right.position.set(W/2 - segW/2, 6, zPos);
+        scene.add(right);
+      }
+      makeEndRail(-H_/2 - 5);
+      makeEndRail(H_/2 + 5);
+
+      var centerLine = new THREE.Mesh(new THREE.RingGeometry(38, 40, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.4, side: THREE.DoubleSide }));
+      centerLine.rotation.x = -Math.PI/2;
+      centerLine.position.set(0, 0.15, 0);
+      scene.add(centerLine);
+      var centerBar = new THREE.Mesh(new THREE.PlaneGeometry(W, 1.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.3 }));
+      centerBar.rotation.x = -Math.PI/2;
+      centerBar.position.set(0, 0.1, 0);
+      scene.add(centerBar);
+
+      var goalMatRed = new THREE.MeshBasicMaterial({ color: 0xFF6B6B });
+      var goalTop = new THREE.Mesh(new THREE.BoxGeometry(GOAL_HALF*2, 1.5, 3), goalMatRed);
+      goalTop.position.set(0, 0.3, -H_/2);
+      scene.add(goalTop);
+      var goalBot = goalTop.clone(); goalBot.position.set(0, 0.3, H_/2); scene.add(goalBot);
+
+      function makeMallet(colorHex) {
+        var grp = new THREE.Group();
+        var base = new THREE.Mesh(new THREE.CylinderGeometry(MALLET_R, MALLET_R, 8, 20), new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.4 }));
+        base.position.y = 4;
+        base.castShadow = true;
+        grp.add(base);
+        var knob = new THREE.Mesh(new THREE.SphereGeometry(7, 14, 10), new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3 }));
+        knob.position.y = 12;
+        knob.castShadow = true;
+        grp.add(knob);
+        return grp;
+      }
+      var cpuMesh = makeMallet(0x3B82F6);
+      var playerMesh = makeMallet(0xFF9F45);
+      scene.add(cpuMesh); scene.add(playerMesh);
+
+      var puckMesh = new THREE.Mesh(new THREE.CylinderGeometry(PUCK_R, PUCK_R, 6, 20), new THREE.MeshStandardMaterial({ color: 0x1b1033, roughness: 0.5 }));
+      puckMesh.castShadow = true;
+      scene.add(puckMesh);
+
+      var trail = [];
+      var trailMat = new THREE.MeshBasicMaterial({ color: 0x1b1033, transparent:true, opacity:0.2 });
+      for (var ti = 0; ti < 8; ti++) {
+        var tm = new THREE.Mesh(new THREE.CircleGeometry(PUCK_R*0.7, 12), trailMat.clone());
+        tm.rotation.x = -Math.PI/2;
+        tm.visible = false;
+        scene.add(tm);
+        trail.push(tm);
+      }
+      var trailPts = [];
+
+      var particles = [];
+      function burst(wx, wz, colorHex, n) {
+        var color = new THREE.Color(colorHex);
+        for (var i = 0; i < n; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: color, transparent:true, opacity:1 });
+          var m = new THREE.Mesh(new THREE.SphereGeometry(1.8, 6, 6), mat);
+          m.position.set(mapX(wx), 6, mapZ(wz));
+          var a = Math.random()*Math.PI*2, sp = 1 + Math.random()*3;
+          scene.add(m);
+          particles.push({ mesh: m, vx: Math.cos(a)*sp, vy: Math.random()*2, vz: Math.sin(a)*sp, life: 1 });
+        }
+      }
+      function stepParticles() {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.vy -= 0.1;
+          p.mesh.position.x += p.vx*0.5; p.mesh.position.y += p.vy*0.5; p.mesh.position.z += p.vz*0.5;
+          p.life -= 0.035;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0 || p.mesh.position.y < 0) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i,1); }
+        }
+      }
+
+      function predictX(atY) {
+        var vx = puckBody.velocity.x, vy = puckBody.velocity.y, px = puckBody.position.x, py = puckBody.position.y;
+        if (vy === 0) return px;
+        var t0 = (atY - py) / vy;
+        if (t0 < 0) return null;
+        var x = px + vx * t0;
+        var span = W - 0;
+        x = x % (2 * span);
+        if (x < 0) x += 2 * span;
+        if (x > span) x = 2 * span - x;
+        return x;
+      }
+
+      function renderFrame() {
+        cpuMesh.position.set(mapX(cpu.x), 0, mapZ(cpu.y));
+        playerMesh.position.set(mapX(player.x), 0, mapZ(player.y));
+        puckMesh.position.set(mapX(puckBody.position.x), 3, mapZ(puckBody.position.y));
+
+        trailPts.unshift({ x: puckBody.position.x, y: puckBody.position.y });
+        if (trailPts.length > 8) trailPts.pop();
+        trail.forEach(function (tm, i) {
+          var pt = trailPts[i];
+          if (pt) {
+            tm.visible = true;
+            tm.position.set(mapX(pt.x), 0.3, mapZ(pt.y));
+            tm.material.opacity = 0.2 * (1 - i/8);
+          } else {
+            tm.visible = false;
+          }
+        });
+
+        stepParticles();
+
+        var sx = 0, sz = 0;
+        if (shake > 0) { sx = (Math.random()-0.5)*shake; sz = (Math.random()-0.5)*shake; shake *= 0.85; if (shake < 0.3) shake = 0; }
+        camera.position.set(sx, 430, 230+sz);
+        camera.lookAt(0, 0, -30);
+
+        renderer.render(scene, camera);
+      }
+
+      function step(dt) {
+        if (!running) return;
         var d = DIFFS[diffIdx];
         if (mode === "1p") {
-          var target = puck.y < 230 ? predictX(cpu.y) : null;
+          var target = puckBody.position.y < 230 ? predictX(cpu.y) : null;
           var tx = target !== null ? target + (Math.random() - 0.5) * d.error : 150;
-          var ty = puck.y < 184 ? Math.max(30, puck.y - 10) : 55;
+          var ty = puckBody.position.y < 184 ? Math.max(30, puckBody.position.y - 10) : 55;
           cpu.x += Math.max(-d.speed, Math.min(d.speed, tx - cpu.x)) * (0.6 + d.reaction);
           cpu.y += Math.max(-d.speed, Math.min(d.speed, ty - cpu.y)) * (0.6 + d.reaction);
           cpu.y = Math.max(20, Math.min(210, cpu.y)); cpu.x = Math.max(20, Math.min(280, cpu.x));
@@ -3310,91 +3469,84 @@ g.airhockey = {
           cpu.y = Math.max(20, Math.min(210, cpu.y)); cpu.x = Math.max(20, Math.min(280, cpu.x));
         }
 
-        var cpuVel = { x: cpu.x - prevCpu.x, y: cpu.y - prevCpu.y };
-        var playerVel = { x: player.x - prevPlayer.x, y: player.y - prevPlayer.y };
+        var MALLET_VEL_CAP = 14;
+        function clampVel(v) {
+          var sp = Math.hypot(v.x, v.y);
+          if (sp > MALLET_VEL_CAP) { var k = MALLET_VEL_CAP / sp; return { x: v.x * k, y: v.y * k }; }
+          return v;
+        }
+        var cpuVel = clampVel({ x: cpu.x - prevCpu.x, y: cpu.y - prevCpu.y });
+        var playerVel = clampVel({ x: player.x - prevPlayer.x, y: player.y - prevPlayer.y });
         prevCpu.x = cpu.x; prevCpu.y = cpu.y; prevPlayer.x = player.x; prevPlayer.y = player.y;
 
-        puck.trail.push({ x: puck.x, y: puck.y, life: 1 });
-        if (puck.trail.length > 10) puck.trail.shift();
+        Matter.Body.setVelocity(cpuBody, cpuVel);
+        Matter.Body.setPosition(cpuBody, cpu);
+        Matter.Body.setVelocity(playerBody, playerVel);
+        Matter.Body.setPosition(playerBody, player);
 
-        puck.x += puck.vx * speedMul; puck.y += puck.vy * speedMul;
-        if (puck.x - puck.r < 0) { puck.x = puck.r; puck.vx *= -1; }
-        if (puck.x + puck.r > W) { puck.x = W - puck.r; puck.vx *= -1; }
+        Matter.Engine.update(engine, Math.min(dt, 33));
 
-        [{ m: cpu, vel: cpuVel, isCpu: true }, { m: player, vel: playerVel, isCpu: false }].forEach(function (entry) {
-          var e2 = entry.m, dx = puck.x - e2.x, dy = puck.y - e2.y, dist = Math.hypot(dx, dy);
-          if (dist < puck.r + MALLET_R) {
-            var nx = dx / (dist || 1), ny = dy / (dist || 1);
-            var impactSpeed = Math.hypot(entry.vel.x, entry.vel.y);
-            var baseSpeed = 6 + Math.min(3, impactSpeed * 0.4);
-            puck.vx = baseSpeed * nx + entry.vel.x * 0.35;
-            puck.vy = baseSpeed * ny + entry.vel.y * 0.35 + (entry.isCpu ? 0.4 : -0.4);
-            puck.x = e2.x + nx * (puck.r + MALLET_R);
-            puck.y = e2.y + ny * (puck.r + MALLET_R);
-            if (impactSpeed > 5) { shake = Math.min(6, impactSpeed * 0.6); burst(puck.x, puck.y, R.ink, 6); }
-          }
-        });
-
-        if (puck.y - puck.r < 0) {
-          if (Math.abs(puck.x - 150) < GOAL_HALF) { goalScored(true); }
-          else { puck.y = puck.r; puck.vy *= -1; }
+        var puckSpeed = Math.hypot(puckBody.velocity.x, puckBody.velocity.y);
+        var PUCK_SPEED_CAP = 24;
+        if (puckSpeed > PUCK_SPEED_CAP) {
+          var pk = PUCK_SPEED_CAP / puckSpeed;
+          Matter.Body.setVelocity(puckBody, { x: puckBody.velocity.x * pk, y: puckBody.velocity.y * pk });
         }
-        if (puck.y + puck.r > H_) {
-          if (Math.abs(puck.x - 150) < GOAL_HALF) { goalScored(false); }
-          else { puck.y = H_ - puck.r; puck.vy *= -1; }
+
+        var py = puckBody.position.y, px = puckBody.position.x;
+        if (py - PUCK_R < 0) {
+          if (Math.abs(px - 150) < GOAL_HALF) { goalScored(true); }
+          else { Matter.Body.setPosition(puckBody, { x: px, y: PUCK_R }); Matter.Body.setVelocity(puckBody, { x: puckBody.velocity.x, y: -puckBody.velocity.y }); }
+        }
+        if (py + PUCK_R > H_) {
+          if (Math.abs(px - 150) < GOAL_HALF) { goalScored(false); }
+          else { Matter.Body.setPosition(puckBody, { x: px, y: H_ - PUCK_R }); Matter.Body.setVelocity(puckBody, { x: puckBody.velocity.x, y: -puckBody.velocity.y }); }
         }
       }
 
-      if (shake > 0) { shake *= 0.85; if (shake < 0.3) shake = 0; }
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy *= 0.94; p.life -= 0.03; });
-      particles = particles.filter(function (p) { return p.life > 0; });
+      function loop(ts) {
+        if (!last) last = ts;
+        var dt = ts - last; last = ts;
+        step(dt);
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
 
-      draw();
+      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("touchmove", onTouchMove, { passive: false });
+      var keyCleanup = H(function (e) {
+        if (mode !== "2p") return;
+        if (e.key === "w" || e.key === "W") { e.preventDefault(); keys.up = true; }
+        else if (e.key === "s" || e.key === "S") { e.preventDefault(); keys.down = true; }
+        else if (e.key === "a" || e.key === "A") { e.preventDefault(); keys.left = true; }
+        else if (e.key === "d" || e.key === "D") { e.preventDefault(); keys.right = true; }
+      });
+      document.addEventListener("keyup", onKeyUp);
+
+      reset();
       raf = requestAnimationFrame(loop);
-    });
 
-    function draw() {
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      var sy = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      ctx.save(); ctx.translate(sx, sy);
-      ctx.fillStyle = R.bg; ctx.fillRect(-10, -10, W + 20, H_ + 20);
-      ctx.strokeStyle = R.grid; ctx.setLineDash([6, 8]);
-      ctx.beginPath(); ctx.moveTo(0, 230); ctx.lineTo(W, 230); ctx.stroke();
-      ctx.beginPath(); ctx.arc(150, 230, 40, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.strokeStyle = R.coral; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(105, 2); ctx.lineTo(195, 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(105, 458); ctx.lineTo(195, 458); ctx.stroke();
-
-      if (puck) {
-        puck.trail.forEach(function (p, i) {
-          ctx.globalAlpha = (i / puck.trail.length) * 0.25;
-          ctx.fillStyle = R.ink;
-          ctx.beginPath(); ctx.arc(p.x, p.y, puck.r * 0.7, 0, Math.PI * 2); ctx.fill();
-        });
-        ctx.globalAlpha = 1;
-      }
-
-      particles.forEach(function (p) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill(); });
-      ctx.globalAlpha = 1;
-
-      ctx.fillStyle = R.blue; ctx.beginPath(); ctx.arc(cpu.x, cpu.y, MALLET_R, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = R.orange; ctx.beginPath(); ctx.arc(player.x, player.y, MALLET_R, 0, Math.PI * 2); ctx.fill();
-      if (puck) { ctx.fillStyle = R.ink; ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI * 2); ctx.fill(); }
-      ctx.restore();
+      return function () {
+        cancelAnimationFrame(raf);
+        running = false;
+        renderer.domElement.removeEventListener("pointermove", onPointerMove);
+        renderer.domElement.removeEventListener("touchmove", onTouchMove);
+        keyCleanup();
+        document.removeEventListener("keyup", onKeyUp);
+        particles.forEach(function(p){ scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+        Matter.Composite.clear(engine.world, false);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    return function () {
-      cancelAnimationFrame(raf);
-      running = false;
-      o.canvas.removeEventListener("pointermove", onPointerMove);
-      o.canvas.removeEventListener("touchmove", onTouchMove);
-      keyCleanup();
-      document.removeEventListener("keyup", onKeyUp);
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+    return csa3DLoadGate(el, t, startGame3D);
   }
-},g.tennis = {
+},
+
+g.tennis = {
   title: "Tennis Rally",
   tagline: "Chase the bounce, clear the net, cover the baseline — first to eleven.",
   color: R.magenta,
