@@ -4120,187 +4120,285 @@ g.snake = {
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18M6 3l9 3-9 3"/><circle cx="18" cy="19" r="2"/></svg>',
   mount: function(el, t) {
-    var W = 360, H_ = 300;
-    var DIFFS = [
-      { name: "Calm", windMax: 0.12, uprightW: 74 },
-      { name: "Breezy", windMax: 0.26, uprightW: 58 },
-      { name: "Gusty", windMax: 0.42, uprightW: 46 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
+    function startGame(){
+      var DIFFS = [
+        { name: "Calm", windMax: 0.12, uprightW: 74 },
+        { name: "Breezy", windMax: 0.26, uprightW: 58 },
+        { name: "Gusty", windMax: 0.42, uprightW: 46 }
+      ];
+      var diffIdx = 1, mode = "1p";
 
-    var made, streak, bestStreak, points, yards, wind, phase, powerT, aimT, power, aim, kick, particles, shake, lastMsg, turn, p1Made, p2Made, raf;
+      var made, streak, bestStreak, points, yards, wind, phase, powerT, aimT, power, aim, kick, lastMsg, turn, p1Made, p2Made, raf, last;
 
-    function newMatch() { turn = 1; p1Made = 0; p2Made = 0; startDrive(); }
+      Matter.Resolver._restingThresh = 0.001;
+      var engine = Matter.Engine.create();
+      engine.gravity.x = 0; engine.gravity.y = 1;
 
-    function startDrive() {
-      made = 0; streak = 0; bestStreak = 0; points = 0; yards = 20;
-      particles = []; shake = 0;
-      setupKick();
-    }
+      var THROW_DIST = 480, THROW_VX = 480/34, THROW_VY0 = 7.6;
 
-    function setupKick() {
-      wind = (2 * Math.random() - 1) * DIFFS[diffIdx].windMax;
-      phase = "power"; powerT = 0; aimT = 0; power = 0; aim = 0.5; kick = null; lastMsg = null;
-      updateHud();
-    }
+      function newMatch() { turn = 1; p1Made = 0; p2Made = 0; startDrive(); }
 
-    function uprightWidth() { return Math.max(26, DIFFS[diffIdx].uprightW - (yards - 20) * 0.18); }
-    function requiredPower() { return Math.min(0.82, 0.34 + (yards - 20) / 130); }
-
-    function updateHud() {
-      var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
-      t.setHud("MADE<b>" + made + "</b>" +
-        '<span style="margin-left:1rem">YARDS<b>' + yards + "</b></span>" +
-        '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" +
-        '<span style="margin-left:1rem">PTS<b>' + points + "</b></span>" + turnTag);
-    }
-
-    function burst(x, y, color, n) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3.6;
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1, life: 1, color: color });
-      }
-    }
-
-    function advance() {
-      if (kick) return;
-      if (phase === "power") { phase = "aim"; return; }
-      if (phase === "aim") { attemptKick(); }
-    }
-
-    function attemptKick() {
-      var reqP = requiredPower();
-      var bandTop = Math.min(0.98, reqP + 0.24);
-      var hangTime = 30 + yards * 0.35;
-      var windDrift = wind * hangTime;
-      var angleOffset = (aim - 0.5) * 2 * 130;
-      var totalOffset = angleOffset + windDrift;
-      var uw = uprightWidth();
-
-      var reason = null;
-      if (power < reqP) reason = "SHORT!";
-      else if (power > bandTop) reason = "OVER-KICKED";
-      else if (Math.abs(totalOffset) >= uw / 2) reason = totalOffset < 0 ? "WIDE LEFT" : "WIDE RIGHT";
-
-      kick = { t: 0, dur: 34, drift: totalOffset, ok: !reason, reason: reason, power: power, resolved: false };
-      phase = "anim";
-    }
-
-    function resolveKick() {
-      if (kick.resolved) return;
-      kick.resolved = true;
-      if (kick.ok) {
-        made++; streak++; bestStreak = Math.max(bestStreak, streak);
-        points += 10 + Math.round((yards - 20) / 5) + Math.min(streak - 1, 5) * 2;
-        lastMsg = { text: "GOOD!", color: R.green };
-        burst(180, 60, R.yellow, 22);
-        yards += 10;
+      function startDrive() {
+        made = 0; streak = 0; bestStreak = 0; points = 0; yards = 20;
         setupKick();
-      } else {
-        streak = 0;
-        lastMsg = { text: kick.reason, color: R.coral };
-        burst(180 + kick.drift * 0.5, 130, R.coral, 10);
-        shake = 6;
-        finishDrive();
       }
-    }
 
-    function finishDrive() {
-      if (mode === "1p") {
-        t.reportScore("fieldgoal", points);
-        t.showOverlay("Drive over", "Made " + made + " kicks (reached " + yards + " yd) · best streak " + bestStreak, "Play again", startDrive);
-      } else if (turn === 1) {
-        p1Made = made; turn = 2;
-        t.showOverlay("Player 1 done!", "P1 made " + p1Made + " kicks — pass the device to Player 2", "Start P2", startDrive);
-      } else {
-        p2Made = made;
-        var win = p1Made === p2Made ? "Draw!" : (p1Made > p2Made ? "Player 1 wins!" : "Player 2 wins!");
-        t.reportScore("fieldgoal", 100 * Math.max(p1Made, p2Made));
-        t.showOverlay(win, "P1: " + p1Made + " kicks · P2: " + p2Made + " kicks", "Play again", newMatch);
+      function setupKick() {
+        wind = (2 * Math.random() - 1) * DIFFS[diffIdx].windMax;
+        phase = "power"; powerT = 0; aimT = 0; power = 0; aim = 0.5; kick = null; lastMsg = null;
+        updateHud();
+        updateGoalpost();
       }
-    }
 
-    o.canvas.addEventListener("pointerdown", advance);
-    var keyCleanup = H(function (e) { if (e.key === " ") { e.preventDefault(); advance(); } });
+      function uprightWidth() { return Math.max(26, DIFFS[diffIdx].uprightW - (yards - 20) * 0.18); }
+      function requiredPower() { return Math.min(0.82, 0.34 + (yards - 20) / 130); }
 
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">WIND</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
-    }
-    renderOpts();
-    newMatch();
+      function updateHud() {
+        var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
+        t.setHud("MADE<b>" + made + "</b>" +
+          '<span style="margin-left:1rem">YARDS<b>' + yards + "</b></span>" +
+          '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" +
+          '<span style="margin-left:1rem">PTS<b>' + points + "</b></span>" + turnTag);
+      }
 
-    function draw() {
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      ctx.save(); ctx.translate(sx, 0);
-      ctx.fillStyle = R.bg; ctx.fillRect(-10, -10, W + 20, H_ + 20);
+      function advance() {
+        if (kick) return;
+        if (phase === "power") { phase = "aim"; return; }
+        if (phase === "aim") { attemptKick(); }
+      }
 
-      var uw = uprightWidth();
-      ctx.strokeStyle = R.yellow; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.moveTo(180, 50); ctx.lineTo(180, 110); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(180 - uw / 2, 50); ctx.lineTo(180 - uw / 2, 20); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(180 + uw / 2, 50); ctx.lineTo(180 + uw / 2, 20); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(180 - uw / 2, 22); ctx.lineTo(180 + uw / 2, 22); ctx.stroke();
-
-      ctx.fillStyle = R.ink; ctx.font = "700 11px Baloo 2, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText("WIND " + (wind > 0 ? "→" : "←") + " " + Math.abs(Math.round(100 * wind)) + "%  ·  " + yards + " YD", 180, 230);
-
-      if (phase === "power" || phase === "aim") {
-        var bx = 30, by = 250, bw = 300, bh = 14;
-        ctx.fillStyle = R.grid; L(ctx, bx, by, bw, bh, 7); ctx.fill();
+      function attemptKick() {
         var reqP = requiredPower();
-        ctx.fillStyle = "rgba(120,255,180,.25)";
-        ctx.fillRect(bx + reqP * bw, by, Math.min(0.24, 0.98 - reqP) * bw, bh);
-        var val = phase === "power" ? power : aim;
-        ctx.fillStyle = phase === "power" ? R.coral : R.teal;
-        ctx.fillRect(bx + val * bw - 2, by - 4, 4, bh + 8);
-        ctx.fillStyle = R.ink; ctx.font = "700 12px Baloo 2, sans-serif";
-        ctx.fillText(phase === "power" ? "Click to set POWER (need enough leg for " + yards + " yd)" : "Click to set AIM", 180, by - 14);
+        var bandTop = Math.min(0.98, reqP + 0.24);
+        var hangTime = 30 + yards * 0.35;
+        var windDrift = wind * hangTime;
+        var angleOffset = (aim - 0.5) * 2 * 130;
+        var totalOffset = angleOffset + windDrift;
+        var uw = uprightWidth();
+
+        var reason = null;
+        if (power < reqP) reason = "SHORT!";
+        else if (power > bandTop) reason = "OVER-KICKED";
+        else if (Math.abs(totalOffset) >= uw / 2) reason = totalOffset < 0 ? "WIDE LEFT" : "WIDE RIGHT";
+
+        var body = Matter.Bodies.circle(0, 0, 5, { frictionAir: 0, friction: 0, restitution: 0 });
+        Matter.Body.setPosition(body, { x: 0, y: 0 });
+        Matter.Body.setVelocity(body, { x: THROW_VX, y: -THROW_VY0 });
+        Matter.Composite.add(engine.world, body);
+
+        kick = { body: body, drift: totalOffset, ok: !reason, reason: reason, resolved: false };
+        phase = "anim";
       }
 
-      ctx.fillStyle = R.ink; L(ctx, 150, 260, 60, 26, 6); ctx.fill();
-
-      if (kick) {
-        var tt = Math.min(1, kick.t / kick.dur);
-        var mx = 180 + kick.drift * tt;
-        var my = 260 - 200 * Math.sin(tt * Math.PI);
-        ctx.fillStyle = "#fdfdfb"; ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2); ctx.fill();
+      function resolveKick() {
+        if (kick.resolved) return;
+        kick.resolved = true;
+        Matter.Composite.remove(engine.world, kick.body);
+        if (kick.ok) {
+          made++; streak++; bestStreak = Math.max(bestStreak, streak);
+          points += 10 + Math.round((yards - 20) / 5) + Math.min(streak - 1, 5) * 2;
+          lastMsg = { text: "GOOD!", color: 0x3DDC97 };
+          yards += 10;
+          setupKick();
+        } else {
+          streak = 0;
+          lastMsg = { text: kick.reason, color: 0xFF6B4A };
+          finishDrive();
+        }
+        updateHud();
       }
 
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.13; p.life -= 0.028; });
-      particles = particles.filter(function (p) { return p.life > 0; });
-      particles.forEach(function (p) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2); ctx.fill(); });
-      ctx.globalAlpha = 1;
+      function finishDrive() {
+        if (mode === "1p") {
+          t.reportScore("fieldgoal", points);
+          t.showOverlay("Drive over", "Made " + made + " kicks (reached " + yards + " yd) · best streak " + bestStreak, "Play again", startDrive);
+        } else if (turn === 1) {
+          p1Made = made; turn = 2;
+          t.showOverlay("Player 1 done!", "P1 made " + p1Made + " kicks — pass the device to Player 2", "Start P2", startDrive);
+        } else {
+          p2Made = made;
+          var win = p1Made === p2Made ? "Draw!" : (p1Made > p2Made ? "Player 1 wins!" : "Player 2 wins!");
+          t.reportScore("fieldgoal", 100 * Math.max(p1Made, p2Made));
+          t.showOverlay(win, "P1: " + p1Made + " kicks · P2: " + p2Made + " kicks", "Play again", newMatch);
+        }
+      }
 
-      if (lastMsg) { ctx.fillStyle = lastMsg.color; ctx.font = "700 15px Baloo 2, sans-serif"; ctx.fillText(lastMsg.text, 180, 130); }
-      ctx.restore();
+      var stackWrap = document.createElement("div");
+      stackWrap.style.cssText = "display:flex;flex-direction:column;align-items:center;width:100%;gap:10px";
+      el.appendChild(stackWrap);
+
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">WIND</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+      }
+      renderOpts();
+
+      // ---------------- 3D rendering (Three.js) ----------------
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:360px;aspect-ratio:360/460;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var meterWrap = document.createElement('div');
+      meterWrap.style.cssText = 'width:100%;max-width:360px;display:flex;flex-direction:column;gap:4px;';
+      var meterLabel = document.createElement('div');
+      meterLabel.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:.72rem;color:' + R.dim + ';text-align:center;';
+      var meterTrack = document.createElement('div');
+      meterTrack.style.cssText = 'position:relative;height:14px;border-radius:7px;background:' + R.grid + ';overflow:hidden;';
+      var meterBand = document.createElement('div');
+      meterBand.style.cssText = 'position:absolute;top:0;bottom:0;background:rgba(120,255,180,.28);';
+      var meterMark = document.createElement('div');
+      meterMark.style.cssText = 'position:absolute;top:-3px;bottom:-3px;width:4px;border-radius:2px;background:' + R.teal + ';';
+      meterTrack.appendChild(meterBand); meterTrack.appendChild(meterMark);
+      meterWrap.appendChild(meterLabel); meterWrap.appendChild(meterTrack);
+      stackWrap.appendChild(meterWrap);
+
+      var VIEW_W = 360, VIEW_H = 460;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x6fb8e6, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x6fb8e6, 400, 1300);
+
+      var GOAL_Z = -520, GOAL_CROSSBAR_Y = 60, BALL_START_Y = 10, KICKER_Z = 180;
+      var camera = new THREE.PerspectiveCamera(56, VIEW_W/VIEW_H, 1, 2000);
+      camera.position.set(0, 60, 260);
+      camera.lookAt(0, GOAL_CROSSBAR_Y, GOAL_Z);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.0);
+      sun.position.set(100, 300, 150);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024,1024);
+      scene.add(sun);
+
+      var groundMat = new THREE.MeshStandardMaterial({ color: 0x2e8b4f, roughness: 0.95 });
+      var ground = new THREE.Mesh(new THREE.PlaneGeometry(900, 1600), groundMat);
+      ground.rotation.x = -Math.PI/2;
+      ground.position.set(0, 0, -300);
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      var stripeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent:true, opacity:0.35 });
+      for (var sz = -60; sz > -1000; sz -= 60) {
+        var stripe = new THREE.Mesh(new THREE.PlaneGeometry(900, 3), stripeMat);
+        stripe.rotation.x = -Math.PI/2;
+        stripe.position.set(0, 0.2, sz);
+        scene.add(stripe);
+      }
+
+      var postMat = new THREE.MeshStandardMaterial({ color: 0xFFD166, metalness:0.3, roughness:0.4 });
+      var goalGroup = new THREE.Group();
+      var poleBase = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, GOAL_CROSSBAR_Y, 10), postMat);
+      poleBase.position.set(0, GOAL_CROSSBAR_Y/2, 0);
+      goalGroup.add(poleBase);
+      var crossbar = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 10, 10), postMat);
+      crossbar.rotation.z = Math.PI/2;
+      crossbar.position.set(0, GOAL_CROSSBAR_Y, 0);
+      goalGroup.add(crossbar);
+      var uprightL = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 36, 10), postMat);
+      var uprightR = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 36, 10), postMat);
+      uprightL.position.set(-5, GOAL_CROSSBAR_Y+18, 0);
+      uprightR.position.set(5, GOAL_CROSSBAR_Y+18, 0);
+      goalGroup.add(uprightL); goalGroup.add(uprightR);
+      goalGroup.position.set(0, 0, GOAL_Z);
+      goalGroup.castShadow = true;
+      scene.add(goalGroup);
+
+      function updateGoalpost(){
+        var half = uprightWidth()/2;
+        uprightL.position.x = -half;
+        uprightR.position.x = half;
+        crossbar.scale.x = (half*2)/10;
+      }
+
+      var ballMesh = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 12), new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.6 }));
+      ballMesh.scale.set(1, 0.7, 0.7);
+      ballMesh.castShadow = true;
+      ballMesh.position.set(0, BALL_START_Y, KICKER_Z);
+      scene.add(ballMesh);
+
+      function renderFrame(){
+        if (kick) {
+          var body = kick.body;
+          var depthT = Math.max(0, Math.min(1, body.position.x / THROW_DIST));
+          var height = Math.max(0, -body.position.y);
+          var wx = kick.drift * depthT;
+          var wy = BALL_START_Y + height * 2.4;
+          var wz = KICKER_Z + (GOAL_Z - KICKER_Z) * depthT;
+          ballMesh.position.set(wx, wy, wz);
+          ballMesh.rotation.x += 0.3;
+        } else {
+          ballMesh.position.set(0, BALL_START_Y, KICKER_Z);
+        }
+
+        if (phase === "power" || phase === "aim") {
+          meterWrap.style.visibility = "visible";
+          var reqP = requiredPower();
+          meterBand.style.left = (reqP*100) + "%";
+          meterBand.style.width = (Math.min(0.24, 0.98-reqP)*100) + "%";
+          var val = phase === "power" ? power : aim;
+          meterMark.style.left = (val*100) + "%";
+          meterMark.style.background = phase === "power" ? R.coral : R.teal;
+          meterLabel.textContent = (phase === "power" ? "Click to set POWER (need enough leg for " + yards + " yd)" : "Click to set AIM") + "  ·  WIND " + (wind > 0 ? "→" : "←") + " " + Math.abs(Math.round(100*wind)) + "%";
+        } else {
+          meterWrap.style.visibility = "hidden";
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      function step(dt){
+        if (phase === "power") { powerT += 0.032; power = (Math.sin(powerT) + 1) / 2; }
+        else if (phase === "aim") { aimT += 0.038; aim = (Math.sin(aimT) + 1) / 2; }
+        else if (phase === "anim" && kick) {
+          Matter.Engine.update(engine, Math.min(dt, 33));
+          if (kick.body.position.x >= THROW_DIST) resolveKick();
+        }
+      }
+
+      function loop(ts){
+        if (!last) last = ts;
+        var dt = ts-last; last = ts;
+        step(dt);
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
+
+      function onDown(){ advance(); }
+      renderer.domElement.addEventListener('mousedown', onDown);
+      renderer.domElement.addEventListener('touchstart', onDown, {passive:true});
+      var keyCleanup = H(function(e){ if (e.key===' ') { e.preventDefault(); advance(); } });
+
+      t.setHint('Click / Space to set power, then aim — real physics, real 3D goalposts');
+      newMatch();
+      raf = requestAnimationFrame(loop);
+
+      return function(){
+        cancelAnimationFrame(raf);
+        keyCleanup();
+        renderer.domElement.removeEventListener('mousedown', onDown);
+        renderer.domElement.removeEventListener('touchstart', onDown);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    raf = requestAnimationFrame(function loop() {
-      if (phase === "power") { powerT += 0.032; power = (Math.sin(powerT) + 1) / 2; }
-      else if (phase === "aim") { aimT += 0.038; aim = (Math.sin(aimT) + 1) / 2; }
-      else if (phase === "anim" && kick) { kick.t++; if (kick.t >= kick.dur) resolveKick(); }
-      if (shake > 0) { shake *= 0.85; if (shake < 0.3) shake = 0; }
-      draw();
-      raf = requestAnimationFrame(loop);
-    });
-
-    return function () {
-      cancelAnimationFrame(raf);
-      o.canvas.removeEventListener("pointerdown", advance);
-      keyCleanup();
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+    return csa3DLoadGate(el, t, startGame);
   }
 },g.darts = {
   title: "Darts",
