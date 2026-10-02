@@ -3554,209 +3554,450 @@ g.tennis = {
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M4.5 7.5c3 3 3 8 0 11M19.5 7.5c-3 3-3 8 0 11"/></svg>',
   mount: function(el, t) {
-    var W = 440, H_ = 300, PADDLE_W = 54, NET_Y = 150;
-    var DIFFS = [
-      { name: "Easy", speed: 2.5, error: 66, reaction: 0.10 },
-      { name: "Medium", speed: 3.5, error: 34, reaction: 0.16 },
-      { name: "Hard", speed: 4.5, error: 12, reaction: 0.26 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
+    function startGame3D(){
+      var W = 440, H_ = 300, PADDLE_W = 54, NET_Y = 150;
+      var DIFFS = [
+        { name: "Easy", speed: 2.5, error: 66, reaction: 0.10 },
+        { name: "Medium", speed: 3.5, error: 34, reaction: 0.16 },
+        { name: "Hard", speed: 4.5, error: 12, reaction: 0.26 }
+      ];
+      var diffIdx = 1, mode = "1p";
 
-    var near, far, ball, playerScore, cpuScore, rallyLen, points, running, particles, shake, keys, raf;
+      var COURT_HALF_W = 120, Z_NEAR = 260, Z_FAR = -260, NET_HEIGHT = 11;
 
-    function reset() {
-      near = { x: 220 }; far = { x: 220 };
-      playerScore = 0; cpuScore = 0; points = 0; particles = []; shake = 0;
-      keys = { left: false, right: false };
-      serve(1);
-      updateHud();
-    }
+      var near, far, ball, playerScore, cpuScore, rallyLen, points, running, particles, shake, keys, raf, last;
 
-    function serve(dir) {
-      rallyLen = 0;
-      ball = {
-        x: 220, z: 0.5, vx: 1.4 * (2 * Math.random() - 1), vz: 0.022 * (dir || 1),
-        legStart: 0.5, legEnd: dir > 0 ? 1 : 0, arcH: 0.3, netChecked: false, trail: []
-      };
-      running = true;
-    }
+      // ---- flight-arc physics (Matter.js drives the ball's height on each leg) ----
+      Matter.Resolver._restingThresh = 0.001;
+      var flightEngine = Matter.Engine.create();
+      flightEngine.gravity.x = 0; flightEngine.gravity.y = 1;
+      var flightBody = Matter.Bodies.circle(0, 0, 4, { frictionAir: 0, friction: 0, restitution: 0 });
+      Matter.Composite.add(flightEngine.world, flightBody);
+      var flightFrames = 1, flightT = 0;
 
-    function updateHud() {
-      var label = mode === "1p" ? "CPU" : "P1";
-      t.setHud(label + "<b>" + cpuScore + "</b>" + '<span style="margin-left:1rem">YOU<b>' + playerScore + "</b></span>" +
-        (rallyLen >= 4 ? '<span style="margin-left:1rem;color:' + R.yellow + '">rally x' + rallyLen + "</span>" : ""));
-    }
-
-    function burst(x, y, color, n) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3;
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color: color });
+      function startLeg() {
+        var frames = Math.max(2, Math.round(Math.abs((ball.legEnd - ball.legStart) / Math.max(0.002, Math.abs(ball.vz)))));
+        var arcWorld = Math.max(4, ball.arcH * 60);
+        var grav = 8 * arcWorld / (frames * frames);
+        var vy0 = 4 * arcWorld / frames;
+        Matter.Body.setPosition(flightBody, { x: 0, y: 0 });
+        Matter.Body.setVelocity(flightBody, { x: 0, y: -vy0 });
+        flightEngine.gravity.y = grav;
+        flightFrames = frames; flightT = 0;
       }
-    }
 
-    function pointWon(playerWins, reason) {
-      running = false;
-      if (playerWins) { playerScore++; points += 10 + rallyLen * 2; }
-      else { cpuScore++; }
-      shake = reason === "net" ? 3 : 5;
-      burst(ball.x, 40 + 210 * ball.z, playerWins ? R.green : R.coral, 14);
-      updateHud();
-      if (playerScore >= 11 || cpuScore >= 11) {
-        var won = playerScore >= 11;
-        if (mode === "1p") {
-          t.reportScore("tennis", points);
-          t.showOverlay(won ? "You win!" : "CPU wins", "Final " + playerScore + " - " + cpuScore, "Play again", reset);
-        } else {
-          t.reportScore("tennis", 50 * Math.max(playerScore, cpuScore));
-          t.showOverlay(won ? "Near side wins!" : "Far side wins!", "Far " + cpuScore + " - Near " + playerScore, "Play again", reset);
-        }
-      } else {
-        setTimeout(function () { serve(playerWins ? -1 : 1); }, 650);
+      function stepFlight() {
+        Matter.Engine.update(flightEngine, 16.67);
+        flightT++;
+        return Math.max(0, -flightBody.position.y);
       }
-    }
 
-    function setNearX(clientX) {
-      var rect = o.canvas.getBoundingClientRect();
-      near.x = Math.max(27, Math.min(413, (clientX - rect.left) * (W / rect.width)));
-    }
-    function onPointerMove(e) { setNearX(e.clientX); }
-    function onTouchMove(e) { if (e.touches[0]) { setNearX(e.touches[0].clientX); e.preventDefault(); } }
-    function onKeyUp(e) {
-      if (e.key === "a" || e.key === "A") keys.left = false;
-      else if (e.key === "d" || e.key === "D") keys.right = false;
-    }
+      function mapX(x) { return (x - 220) * (COURT_HALF_W / 193); }
+      function mapZ(z) { return (z - 0.5) * 520; }
 
-    o.canvas.addEventListener("pointermove", onPointerMove);
-    o.canvas.addEventListener("touchmove", onTouchMove, { passive: false });
-    var keyCleanup = H(function (e) {
-      if (e.key === "ArrowLeft") { e.preventDefault(); near.x = Math.max(27, near.x - 20); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); near.x = Math.min(413, near.x + 20); }
-      else if (mode === "2p" && (e.key === "a" || e.key === "A")) { e.preventDefault(); keys.left = true; }
-      else if (mode === "2p" && (e.key === "d" || e.key === "D")) { e.preventDefault(); keys.right = true; }
-    });
-    document.addEventListener("keyup", onKeyUp);
+      function reset() {
+        near = { x: 220 }; far = { x: 220 };
+        playerScore = 0; cpuScore = 0; points = 0; particles = []; shake = 0;
+        keys = { left: false, right: false };
+        serve(1);
+        updateHud();
+      }
 
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
-    }
-    renderOpts();
-    reset();
+      function serve(dir) {
+        rallyLen = 0;
+        ball = {
+          x: 220, z: 0.5, vx: 1.4 * (2 * Math.random() - 1), vz: 0.022 * (dir || 1),
+          legStart: 0.5, legEnd: dir > 0 ? 1 : 0, arcH: 0.3, netChecked: false, resolved: false
+        };
+        startLeg();
+        triggerSwing(dir > 0 ? farFig : nearFig);
+        running = true;
+      }
 
-    function tryReturn(paddle, isNear, paddleTargetHint) {
-      var offset = (ball.x - paddle.x) / (PADDLE_W / 2); // -1..1, how off-centre the hit was
-      var strength = Math.max(0.15, 1 - Math.abs(offset) * 0.7);
-      ball.vz *= -1.06;
-      ball.z = isNear ? 0.999 : 0.001;
-      var aim = paddleTargetHint !== undefined ? paddleTargetHint : (ball.x + offset * 90);
-      ball.vx = ball.vx * 0.5 + (aim - ball.x) * 0.02 + offset * 1.6;
-      ball.legStart = ball.z; ball.legEnd = isNear ? 0 : 1; ball.netChecked = false;
-      ball.arcH = 0.10 + 0.4 * strength;
-      rallyLen++;
-      updateHud();
-    }
+      function updateHud() {
+        var label = mode === "1p" ? "CPU" : "P1";
+        t.setHud(label + "<b>" + cpuScore + "</b>" + '<span style="margin-left:1rem">YOU<b>' + playerScore + "</b></span>" +
+          (rallyLen >= 4 ? '<span style="margin-left:1rem;color:' + R.yellow + '">rally x' + rallyLen + "</span>" : ""));
+      }
 
-    raf = requestAnimationFrame(function loop() {
-      if (running) {
-        var d = DIFFS[diffIdx];
-        if (mode === "1p") {
-          var willReceive = ball.z < 0.5 && ball.vz < 0;
-          var predicted = willReceive ? ball.x + ball.vx * (ball.z / Math.max(0.002, -ball.vz)) : 220;
-          var targetX = willReceive ? predicted + (Math.random() - 0.5) * d.error : 220;
-          far.x += Math.max(-d.speed, Math.min(d.speed, targetX - far.x)) * (0.55 + d.reaction);
-        } else {
-          if (keys.left) far.x -= 4.2;
-          if (keys.right) far.x += 4.2;
+      function burst(wx, wy, wz, color, n) {
+        var c = new THREE.Color(color);
+        for (var i = 0; i < n; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1 });
+          var m = new THREE.Mesh(new THREE.SphereGeometry(1.6, 6, 6), mat);
+          m.position.set(wx, wy, wz);
+          var a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3;
+          scene.add(m);
+          particles.push({ mesh: m, vx: Math.cos(a) * sp, vy: Math.random() * 2.6, vz: Math.sin(a) * sp, life: 1, color: color });
         }
-        far.x = Math.max(27, Math.min(413, far.x));
-        near.x = Math.max(27, Math.min(413, near.x));
+      }
 
-        var prevZ = ball.z;
-        ball.x += ball.vx;
-        ball.z += ball.vz;
-        if (ball.x < 10 || ball.x > 430) ball.vx *= -1;
+      function pointWon(playerWins, reason) {
+        running = false;
+        if (playerWins) { playerScore++; points += 10 + rallyLen * 2; }
+        else { cpuScore++; }
+        shake = reason === "net" ? 3 : 5;
+        burst(mapX(ball.x), 10, mapZ(ball.z), playerWins ? R.green : R.coral, 14);
+        updateHud();
+        if (playerScore >= 11 || cpuScore >= 11) {
+          var won = playerScore >= 11;
+          if (mode === "1p") {
+            t.reportScore("tennis", points);
+            t.showOverlay(won ? "You win!" : "CPU wins", "Final " + playerScore + " - " + cpuScore, "Play again", reset);
+          } else {
+            t.reportScore("tennis", 50 * Math.max(playerScore, cpuScore));
+            t.showOverlay(won ? "Near side wins!" : "Far side wins!", "Far " + cpuScore + " - Near " + playerScore, "Play again", reset);
+          }
+        } else {
+          setTimeout(function () { serve(playerWins ? -1 : 1); }, 650);
+        }
+      }
 
-        ball.trail.push({ x: ball.x, z: ball.z });
-        if (ball.trail.length > 8) ball.trail.shift();
+      function setNearX(clientX) {
+        var rect = renderer.domElement.getBoundingClientRect();
+        near.x = Math.max(27, Math.min(413, (clientX - rect.left) * (W / rect.width)));
+      }
+      function onPointerMove(e) { setNearX(e.clientX); }
+      function onTouchMove(e) { if (e.touches[0]) { setNearX(e.touches[0].clientX); e.preventDefault(); } }
+      function onKeyUp(e) {
+        if (e.key === "a" || e.key === "A") keys.left = false;
+        else if (e.key === "d" || e.key === "D") keys.right = false;
+      }
 
-        // net check as the ball crosses the middle
-        if (!ball.netChecked && ((prevZ < 0.5 && ball.z >= 0.5) || (prevZ > 0.5 && ball.z <= 0.5))) {
-          ball.netChecked = true;
-          var u = (0.5 - ball.legStart) / (ball.legEnd - ball.legStart || 1);
-          var h = ball.arcH * 4 * u * (1 - u);
-          if (h < 0.1) {
-            var hitterIsNear = ball.legEnd < 0.5; // ball was travelling toward far side means near hit it
-            pointWon(!hitterIsNear, "net");
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
+
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+      }
+      renderOpts();
+
+      // ---------------- 3D rendering ----------------
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:440px;aspect-ratio:440/300;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var VIEW_W = 440, VIEW_H = 300;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0c1a2e, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0c1a2e, 520, 1450);
+
+      var camera = new THREE.PerspectiveCamera(62, VIEW_W / VIEW_H, 1, 2000);
+      camera.position.set(0, 260, 560);
+      camera.lookAt(0, 30, -180);
+
+      scene.add(new THREE.AmbientLight(0xcfe0ff, 0.65));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.05);
+      sun.position.set(120, 300, 160);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024, 1024);
+      scene.add(sun);
+
+      // court surface (hard court blue, green surround)
+      var surround = new THREE.Mesh(new THREE.PlaneGeometry(600, 760), new THREE.MeshStandardMaterial({ color: 0x1c5c3d, roughness: 0.95 }));
+      surround.rotation.x = -Math.PI / 2;
+      surround.position.set(0, -0.1, 0);
+      surround.receiveShadow = true;
+      scene.add(surround);
+
+      var court = new THREE.Mesh(new THREE.PlaneGeometry(COURT_HALF_W * 2 + 40, 600), new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: 0.9 }));
+      court.rotation.x = -Math.PI / 2;
+      court.position.set(0, 0, 0);
+      court.receiveShadow = true;
+      scene.add(court);
+
+      function lineMesh(w, d, x, z) {
+        var m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(x, 0.08, z);
+        scene.add(m);
+        return m;
+      }
+      // baselines, sidelines, service lines, centre line, net line
+      lineMesh(COURT_HALF_W * 2 + 20, 2.4, 0, Z_NEAR);
+      lineMesh(COURT_HALF_W * 2 + 20, 2.4, 0, Z_FAR);
+      lineMesh(2.4, Z_NEAR - Z_FAR, -COURT_HALF_W - 9, 0);
+      lineMesh(2.4, Z_NEAR - Z_FAR, COURT_HALF_W + 9, 0);
+      lineMesh(COURT_HALF_W * 2 - 10, 2.2, 0, 130);
+      lineMesh(COURT_HALF_W * 2 - 10, 2.2, 0, -130);
+      lineMesh(2.2, 260, 0, 0);
+      lineMesh(2.2, 4, 0, 0);
+
+      // net
+      var netPostMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
+      var postL = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, NET_HEIGHT + 4, 10), netPostMat);
+      postL.position.set(-COURT_HALF_W - 10, (NET_HEIGHT + 4) / 2, 0);
+      postL.castShadow = true;
+      scene.add(postL);
+      var postR = postL.clone();
+      postR.position.set(COURT_HALF_W + 10, (NET_HEIGHT + 4) / 2, 0);
+      scene.add(postR);
+      var netGroup = new THREE.Group();
+      var netMesh = new THREE.Mesh(new THREE.PlaneGeometry(COURT_HALF_W * 2 + 20, NET_HEIGHT), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+      netMesh.position.set(0, NET_HEIGHT / 2, 0);
+      netGroup.add(netMesh);
+      var netTapeTop = new THREE.Mesh(new THREE.BoxGeometry(COURT_HALF_W * 2 + 20, 1.4, 1.4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      netTapeTop.position.set(0, NET_HEIGHT, 0);
+      netGroup.add(netTapeTop);
+      scene.add(netGroup);
+
+      // ---- player figures (body + arm + racket) ----
+      function makeRacket() {
+        var grp = new THREE.Group();
+        var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 13, 8), new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5 }));
+        handle.position.y = 6.5;
+        grp.add(handle);
+        var throat = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 8, 6), new THREE.MeshStandardMaterial({ color: 0x2b2b2b }));
+        throat.position.y = 15;
+        grp.add(throat);
+        var rim = new THREE.Mesh(new THREE.TorusGeometry(8, 1.1, 8, 20), new THREE.MeshStandardMaterial({ color: 0xE8E8E8, roughness: 0.4 }));
+        rim.position.y = 24;
+        grp.add(rim);
+        var strings = new THREE.Mesh(new THREE.CircleGeometry(7.2, 16), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, side: THREE.DoubleSide, wireframe: true }));
+        strings.position.y = 24;
+        grp.add(strings);
+        return grp;
+      }
+
+      function makePlayer(bodyColor, skinColor) {
+        var grp = new THREE.Group();
+        var legs = new THREE.Mesh(new THREE.CylinderGeometry(5, 6, 16, 8), new THREE.MeshStandardMaterial({ color: 0x24324a, roughness: 0.8 }));
+        legs.position.y = 8;
+        legs.castShadow = true;
+        grp.add(legs);
+        var torso = new THREE.Mesh(new THREE.BoxGeometry(14, 20, 9), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        torso.position.y = 26;
+        torso.castShadow = true;
+        grp.add(torso);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(6.2, 14, 10), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 }));
+        head.position.y = 40;
+        head.castShadow = true;
+        grp.add(head);
+        var offArm = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.3, 13, 8), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        offArm.position.set(-11, 26, 0);
+        offArm.rotation.z = 0.35;
+        grp.add(offArm);
+
+        var armPivot = new THREE.Group();
+        armPivot.position.set(11, 33, 0);
+        grp.add(armPivot);
+        var arm = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.4, 13, 8), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        arm.position.y = -8;
+        arm.castShadow = true;
+        armPivot.add(arm);
+        var racket = makeRacket();
+        racket.position.y = -16;
+        racket.rotation.x = -0.25;
+        armPivot.add(racket);
+
+        return { group: grp, armPivot: armPivot, restRot: -0.3, swinging: false, swingT: 0 };
+      }
+
+      var nearFig = makePlayer(new THREE.Color(R.orange), 0xE8B48C);
+      var farFig = makePlayer(new THREE.Color(R.blue), 0xE8B48C);
+      nearFig.armPivot.rotation.x = nearFig.restRot;
+      farFig.armPivot.rotation.x = farFig.restRot;
+      scene.add(nearFig.group);
+      scene.add(farFig.group);
+
+      var SWING_DUR = 14;
+      function triggerSwing(fig) { fig.swinging = true; fig.swingT = 0; }
+      function stepSwing(fig) {
+        if (fig.swinging) {
+          fig.swingT++;
+          var u = fig.swingT / SWING_DUR;
+          if (u >= 1) { fig.swinging = false; fig.armPivot.rotation.x = fig.restRot; }
+          else {
+            var s = Math.sin(u * Math.PI);
+            fig.armPivot.rotation.x = fig.restRot - s * 1.5;
           }
         }
+      }
 
-        // note: pointWon()/tryReturn() may replace `running`/`ball` (via a synchronous
-        // re-serve); guard each check with `running` so a scored point this frame
-        // doesn't get double-counted against the fresh ball below.
-        if (running && ball.z <= 0) {
-          if (Math.abs(ball.x - far.x) < PADDLE_W / 2 + 6) { tryReturn(far, false); }
-          else { pointWon(true, "winner"); }
-        }
-        if (running && ball.z >= 1) {
-          if (Math.abs(ball.x - near.x) < PADDLE_W / 2 + 6) { tryReturn(near, true, far.x + (Math.random() - 0.5) * 140); }
-          else { pointWon(false, "winner"); }
+      // ---- ball ----
+      function makeTennisBallTexture() {
+        var c = document.createElement('canvas'); c.width = 128; c.height = 128;
+        var cx = c.getContext('2d');
+        cx.fillStyle = '#d8e84a'; cx.fillRect(0, 0, 128, 128);
+        cx.strokeStyle = '#ffffff'; cx.lineWidth = 6; cx.lineCap = 'round';
+        cx.beginPath(); cx.moveTo(8, 30); cx.quadraticCurveTo(64, 70, 24, 124); cx.stroke();
+        cx.beginPath(); cx.moveTo(120, 30); cx.quadraticCurveTo(64, 70, 104, 124); cx.stroke();
+        return new THREE.CanvasTexture(c);
+      }
+      var ballTex = makeTennisBallTexture();
+      var BALL_R = 5.2;
+      var ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 16, 12), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.75 }));
+      ballMesh.castShadow = true;
+      scene.add(ballMesh);
+      var ballShadow = new THREE.Mesh(new THREE.CircleGeometry(6, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28 }));
+      ballShadow.rotation.x = -Math.PI / 2;
+      ballShadow.position.y = 0.15;
+      scene.add(ballShadow);
+
+      function stepParticles() {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.vy -= 0.12;
+          p.mesh.position.x += p.vx * 0.5; p.mesh.position.y += p.vy * 0.5; p.mesh.position.z += p.vz * 0.5;
+          p.life -= 0.03;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i, 1); }
         }
       }
-      if (shake > 0) { shake *= 0.85; if (shake < 0.3) shake = 0; }
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.life -= 0.03; });
-      particles = particles.filter(function (p) { return p.life > 0; });
-      draw();
+
+      o_canvas_listeners();
+      function o_canvas_listeners() {
+        renderer.domElement.addEventListener("pointermove", onPointerMove);
+        renderer.domElement.addEventListener("touchmove", onTouchMove, { passive: false });
+      }
+      var keyCleanup = H(function (e) {
+        if (e.key === "ArrowLeft") { e.preventDefault(); near.x = Math.max(27, near.x - 20); }
+        else if (e.key === "ArrowRight") { e.preventDefault(); near.x = Math.min(413, near.x + 20); }
+        else if (mode === "2p" && (e.key === "a" || e.key === "A")) { e.preventDefault(); keys.left = true; }
+        else if (mode === "2p" && (e.key === "d" || e.key === "D")) { e.preventDefault(); keys.right = true; }
+      });
+      document.addEventListener("keyup", onKeyUp);
+
+      function tryReturn(paddle, isNear, paddleTargetHint) {
+        var offset = (ball.x - paddle.x) / (PADDLE_W / 2); // -1..1, how off-centre the hit was
+        var strength = Math.max(0.15, 1 - Math.abs(offset) * 0.7);
+        ball.vz *= -1.06;
+        ball.z = isNear ? 0.999 : 0.001;
+        var aim = paddleTargetHint !== undefined ? paddleTargetHint : (ball.x + offset * 90);
+        ball.vx = ball.vx * 0.5 + (aim - ball.x) * 0.02 + offset * 1.6;
+        ball.legStart = ball.z; ball.legEnd = isNear ? 0 : 1; ball.netChecked = false;
+        ball.arcH = 0.10 + 0.4 * strength;
+        startLeg();
+        triggerSwing(isNear ? nearFig : farFig);
+        rallyLen++;
+        updateHud();
+      }
+
+      function stepGame() {
+        if (running) {
+          var d = DIFFS[diffIdx];
+          if (mode === "1p") {
+            var willReceive = ball.z < 0.5 && ball.vz < 0;
+            var predicted = willReceive ? ball.x + ball.vx * (ball.z / Math.max(0.002, -ball.vz)) : 220;
+            var targetX = willReceive ? predicted + (Math.random() - 0.5) * d.error : 220;
+            far.x += Math.max(-d.speed, Math.min(d.speed, targetX - far.x)) * (0.55 + d.reaction);
+          } else {
+            if (keys.left) far.x -= 4.2;
+            if (keys.right) far.x += 4.2;
+          }
+          far.x = Math.max(27, Math.min(413, far.x));
+          near.x = Math.max(27, Math.min(413, near.x));
+
+          var prevZ = ball.z;
+          ball.x += ball.vx;
+          ball.z += ball.vz;
+          if (ball.x < 10 || ball.x > 430) ball.vx *= -1;
+
+          ball.height = stepFlight();
+
+          // net check as the ball crosses the middle
+          if (!ball.netChecked && ((prevZ < 0.5 && ball.z >= 0.5) || (prevZ > 0.5 && ball.z <= 0.5))) {
+            ball.netChecked = true;
+            var u = (0.5 - ball.legStart) / (ball.legEnd - ball.legStart || 1);
+            var h = ball.arcH * 4 * u * (1 - u);
+            if (h < 0.1) {
+              var hitterIsNear = ball.legEnd < 0.5; // ball was travelling toward far side means near hit it
+              pointWon(!hitterIsNear, "net");
+            }
+          }
+
+          // note: pointWon()/tryReturn() may replace `running`/`ball` (via a synchronous
+          // re-serve); guard each check with `running` so a scored point this frame
+          // doesn't get double-counted against the fresh ball below.
+          if (running && ball.z <= 0) {
+            if (Math.abs(ball.x - far.x) < PADDLE_W / 2 + 6) { tryReturn(far, false); }
+            else { pointWon(true, "winner"); }
+          }
+          if (running && ball.z >= 1) {
+            if (Math.abs(ball.x - near.x) < PADDLE_W / 2 + 6) { tryReturn(near, true, far.x + (Math.random() - 0.5) * 140); }
+            else { pointWon(false, "winner"); }
+          }
+        }
+        if (shake > 0) { shake *= 0.85; if (shake < 0.3) shake = 0; }
+        stepParticles();
+        stepSwing(nearFig);
+        stepSwing(farFig);
+      }
+
+      function renderFrame() {
+        nearFig.group.position.set(mapX(near.x), 0, Z_NEAR + 14);
+        farFig.group.position.set(mapX(far.x), 0, Z_FAR - 14);
+        farFig.group.rotation.y = Math.PI;
+
+        if (ball) {
+          var wx = mapX(ball.x), wz = mapZ(ball.z);
+          var h = (ball.height || 0) + BALL_R;
+          ballMesh.position.set(wx, h, wz);
+          ballMesh.rotation.x -= 0.1 + Math.abs(ball.vz) * 2;
+          ballMesh.rotation.z += 0.03;
+          ballShadow.position.set(wx, 0.15, wz);
+          var shrink = Math.max(0.3, 1 - (ball.height || 0) / 60);
+          ballShadow.scale.set(shrink, shrink, shrink);
+          ballMesh.visible = true;
+          ballShadow.visible = true;
+        }
+
+        var sx = 0;
+        if (shake > 0) { sx = (Math.random() - 0.5) * shake; }
+        camera.position.set(sx, 260, 560);
+        camera.lookAt(0, 30, -180);
+
+        renderer.render(scene, camera);
+      }
+
+      function loop(ts) {
+        if (!last) last = ts;
+        last = ts;
+        stepGame();
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
+
+      reset();
       raf = requestAnimationFrame(loop);
-    });
 
-    function draw() {
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      ctx.save(); ctx.translate(sx, 0);
-      ctx.fillStyle = R.bg; ctx.fillRect(-10, -10, W + 20, H_ + 20);
-      ctx.strokeStyle = R.grid; ctx.beginPath(); ctx.moveTo(0, NET_Y); ctx.lineTo(W, NET_Y); ctx.stroke();
-      ctx.strokeRect(20, 36, 400, 228);
-      ctx.fillStyle = R.blue; L(ctx, far.x - PADDLE_W / 2, 32, PADDLE_W, 8, 3); ctx.fill();
-      ctx.fillStyle = R.orange; L(ctx, near.x - PADDLE_W / 2, 260, PADDLE_W, 8, 3); ctx.fill();
-
-      if (ball) {
-        var zScreenY = 40 + 210 * ball.z;
-        var u = (ball.z - ball.legStart) / ((ball.legEnd - ball.legStart) || 1);
-        u = Math.max(0, Math.min(1, u));
-        var hop = ball.arcH * 4 * u * (1 - u) * 60;
-        var scale = 0.6 + 0.7 * ball.z;
-        // shadow on the court
-        ctx.fillStyle = "rgba(0,0,0,.25)";
-        ctx.beginPath(); ctx.ellipse(ball.x, zScreenY, 5 * scale, 2 * scale, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = R.yellow;
-        ctx.beginPath(); ctx.arc(ball.x, zScreenY - hop, 6 * scale, 0, Math.PI * 2); ctx.fill();
-      }
-
-      particles.forEach(function (p) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2); ctx.fill(); });
-      ctx.globalAlpha = 1;
-      ctx.restore();
+      return function () {
+        cancelAnimationFrame(raf);
+        running = false;
+        renderer.domElement.removeEventListener("pointermove", onPointerMove);
+        renderer.domElement.removeEventListener("touchmove", onTouchMove);
+        keyCleanup();
+        document.removeEventListener("keyup", onKeyUp);
+        particles.forEach(function (p) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+        Matter.Composite.remove(flightEngine.world, flightBody);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    return function () {
-      cancelAnimationFrame(raf);
-      running = false;
-      o.canvas.removeEventListener("pointermove", onPointerMove);
-      o.canvas.removeEventListener("touchmove", onTouchMove);
-      keyCleanup();
-      document.removeEventListener("keyup", onKeyUp);
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+    return csa3DLoadGate(el, t, startGame3D);
   }
-},g.boxing = {
+},
+g.boxing = {
   title: "Reflex Boxing",
   tagline: "Watch the cue, throw the right punch, knock out the clock.",
   color: R.coral,
