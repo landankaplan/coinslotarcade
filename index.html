@@ -5782,15 +5782,20 @@ g.bowling = {
         { name: "Shaky", wobbleSpeed: 0.075, wobbleR: 88 },
         { name: "Jumpy", wobbleSpeed: 0.11, wobbleR: 108 }
       ];
-      var ZONES = [
-        { r: 14, val: 50, name: "BULLSEYE" },
-        { r: 34, val: 25, name: "BULL" },
-        { r: 60, val: 15, name: "" },
-        { r: 90, val: 10, name: "" },
-        { r: 120, val: 5, name: "" }
+      // Real dartboard geometry: scoring radius 120 world-units == 170mm real double-wire edge.
+      var BOARD_R = 120, REAL_EDGE_MM = 170, SCALE = BOARD_R / REAL_EDGE_MM;
+      var R_BULLSEYE = 6.35 * SCALE;      // 50
+      var R_BULL = 15.9 * SCALE;          // 25
+      var R_TRIPLE_IN = 99 * SCALE, R_TRIPLE_OUT = 107 * SCALE;   // x3 ring
+      var R_DOUBLE_IN = 162 * SCALE, R_DOUBLE_OUT = 170 * SCALE;  // x2 ring, == BOARD_R
+      // Standard dartboard number order, clockwise from top (12 o'clock).
+      var NUMBERS = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+      var POVS = [
+        { name: "Oche", pos: [0, 10, 300], look: [0, 24, -360], fov: 58 },
+        { name: "Broadcast", pos: [230, 60, -30], look: [0, 30, -360], fov: 46 },
+        { name: "Board Cam", pos: [0, 32, 110], look: [0, 24, -360], fov: 30 }
       ];
-      var ZONE_COLORS = [0xFF6B4A, 0xFFD166, 0x3DDC97, 0x4DA6FF, 0x8C7CF0];
-      var diffIdx = 1, mode = "1p";
+      var diffIdx = 1, mode = "1p", povIdx = 0;
 
       var turn, scores, dartIdx, tOsc, dart, lastScore, streak, roundOver, raf, last;
       var stuckDarts = [];
@@ -5825,19 +5830,23 @@ g.bowling = {
         };
       }
 
+      function sectorNumber(x, y) {
+        // y positive = downward in this board space (matches mesh mapping BOARD_Y - p.y).
+        var deg = Math.atan2(x, -y) * 180 / Math.PI;
+        deg = (deg + 360) % 360;
+        var idx = Math.floor(((deg + 9) % 360) / 18);
+        return NUMBERS[idx];
+      }
+
       function scoreAt(x, y) {
         var dist = Math.hypot(x, y);
-        for (var i = 0; i < ZONES.length; i++) {
-          if (dist < ZONES[i].r) {
-            var base = ZONES[i].val, mult = 1, label = ZONES[i].name || (base + "");
-            if (i >= 2) {
-              if (dist > ZONES[i].r - 26 && dist < ZONES[i].r - 20) { mult = 3; label = "TRIPLE " + base; }
-              else if (dist > ZONES[i].r - 5 && dist < ZONES[i].r) { mult = 2; label = "DOUBLE " + base; }
-            }
-            return { value: base * mult, label: label };
-          }
-        }
-        return { value: 0, label: "MISS" };
+        if (dist > R_DOUBLE_OUT) return { value: 0, label: "MISS" };
+        if (dist < R_BULLSEYE) return { value: 50, label: "BULLSEYE" };
+        if (dist < R_BULL) return { value: 25, label: "BULL" };
+        var num = sectorNumber(x, y);
+        if (dist >= R_TRIPLE_IN && dist <= R_TRIPLE_OUT) return { value: num * 3, label: "TRIPLE " + num };
+        if (dist >= R_DOUBLE_IN && dist <= R_DOUBLE_OUT) return { value: num * 2, label: "DOUBLE " + num };
+        return { value: num, label: num + "" };
       }
 
       function throwDart() {
@@ -5898,9 +5907,13 @@ g.bowling = {
           '<span class="opt-group"><span class="opt-label">WOBBLE</span>' +
           DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          "</span>";
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); renderOpts(); applyPov(); }); });
       }
       renderOpts();
 
@@ -5923,8 +5936,14 @@ g.bowling = {
 
       var BOARD_Z = -360, THROWER_X = 0, THROWER_Y = -40, THROWER_Z = 160, BOARD_Y = 24;
       var camera = new THREE.PerspectiveCamera(58, VIEW_W/VIEW_H, 1, 2000);
-      camera.position.set(0, 10, 300);
-      camera.lookAt(0, BOARD_Y, BOARD_Z);
+      function applyPov(){
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.position.set(p.pos[0], p.pos[1], p.pos[2]);
+        camera.lookAt(p.look[0], p.look[1], p.look[2]);
+        camera.updateProjectionMatrix();
+      }
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0x8080ff, 0.55));
       var sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -5940,26 +5959,66 @@ g.bowling = {
       wall.receiveShadow = true;
       scene.add(wall);
 
+      // Oche (throw line) marking on the floor, in front of the thrower.
+      var ocheGeo = new THREE.PlaneGeometry(60, 4);
+      var ocheMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+      var oche = new THREE.Mesh(ocheGeo, ocheMat);
+      oche.rotation.x = -Math.PI/2;
+      oche.position.set(0, -60, THROWER_Z - 20);
+      scene.add(oche);
+
       var boardCanvas = document.createElement('canvas');
-      boardCanvas.width = boardCanvas.height = 256;
+      boardCanvas.width = boardCanvas.height = 512;
       var bctx = boardCanvas.getContext('2d');
+      var TEX_PAD = 18; // world units of margin beyond the double ring, for the number ring
       function drawBoardTexture(){
-        var BCX = 128, BCY = 128, scale = 128/120;
-        bctx.clearRect(0,0,256,256);
-        for (var i = ZONES.length - 1; i >= 0; i--) {
-          var hex = '#' + ZONE_COLORS[i].toString(16).padStart(6,'0');
-          bctx.fillStyle = hex;
-          bctx.beginPath(); bctx.arc(BCX, BCY, ZONES[i].r*scale, 0, Math.PI*2); bctx.fill();
-          if (i >= 2) {
-            bctx.strokeStyle = 'rgba(0,0,0,.35)'; bctx.lineWidth = 4;
-            bctx.beginPath(); bctx.arc(BCX, BCY, (ZONES[i].r-23)*scale, 0, Math.PI*2); bctx.stroke();
-            bctx.beginPath(); bctx.arc(BCX, BCY, (ZONES[i].r-2.5)*scale, 0, Math.PI*2); bctx.stroke();
-          }
+        var CX = 256, CY = 256, scale = 256 / (BOARD_R + TEX_PAD);
+        bctx.fillStyle = '#1a1340';
+        bctx.fillRect(0, 0, 512, 512);
+        var rBullseye = R_BULLSEYE * scale, rBull = R_BULL * scale;
+        var rT0 = R_TRIPLE_IN * scale, rT1 = R_TRIPLE_OUT * scale;
+        var rD0 = R_DOUBLE_IN * scale, rD1 = R_DOUBLE_OUT * scale;
+        var SINGLE_DARK = '#15212b', SINGLE_LIGHT = '#e8dcc4';
+        var RING_RED = '#c22b2b', RING_GREEN = '#1f7a3f';
+        for (var i = 0; i < 20; i++) {
+          var a0 = (i * 18 - 9 - 90) * Math.PI / 180;
+          var a1 = (i * 18 + 9 - 90) * Math.PI / 180;
+          var alt = i % 2 === 0;
+          // outer single band
+          bctx.fillStyle = alt ? SINGLE_LIGHT : SINGLE_DARK;
+          bctx.beginPath(); bctx.moveTo(CX,CY); bctx.arc(CX, CY, rD0, a0, a1); bctx.closePath(); bctx.fill();
+          // re-draw inner single band (between bull and triple) same color
+          bctx.beginPath(); bctx.moveTo(CX,CY); bctx.arc(CX, CY, rT0, a0, a1); bctx.closePath(); bctx.fill();
+          // triple ring
+          bctx.fillStyle = alt ? RING_GREEN : RING_RED;
+          bctx.beginPath();
+          bctx.arc(CX, CY, rT1, a0, a1); bctx.arc(CX, CY, rT0, a1, a0, true); bctx.closePath(); bctx.fill();
+          // double ring
+          bctx.beginPath();
+          bctx.arc(CX, CY, rD1, a0, a1); bctx.arc(CX, CY, rD0, a1, a0, true); bctx.closePath(); bctx.fill();
+          // wedge divider wire
+          bctx.strokeStyle = 'rgba(0,0,0,.4)'; bctx.lineWidth = 1.5;
+          bctx.beginPath(); bctx.moveTo(CX + Math.cos(a0)*rBull, CY + Math.sin(a0)*rBull); bctx.lineTo(CX + Math.cos(a0)*rD1, CY + Math.sin(a0)*rD1); bctx.stroke();
+          // number label
+          var mid = (i * 18 - 90) * Math.PI / 180;
+          var lx = CX + Math.cos(mid) * (rD1 + 16), ly = CY + Math.sin(mid) * (rD1 + 16);
+          bctx.fillStyle = '#f2ead8';
+          bctx.font = 'bold 20px sans-serif';
+          bctx.textAlign = 'center'; bctx.textBaseline = 'middle';
+          bctx.fillText(NUMBERS[i] + '', lx, ly);
         }
+        // bulls
+        bctx.fillStyle = RING_GREEN;
+        bctx.beginPath(); bctx.arc(CX, CY, rBull, 0, Math.PI*2); bctx.fill();
+        bctx.fillStyle = RING_RED;
+        bctx.beginPath(); bctx.arc(CX, CY, rBullseye, 0, Math.PI*2); bctx.fill();
+        // outer wooden surround ring
+        bctx.strokeStyle = '#2b1d10'; bctx.lineWidth = 8;
+        bctx.beginPath(); bctx.arc(CX, CY, rD1 + 28, 0, Math.PI*2); bctx.stroke();
       }
       drawBoardTexture();
       var boardTex = new THREE.CanvasTexture(boardCanvas);
-      var boardMesh = new THREE.Mesh(new THREE.CircleGeometry(120, 48), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.7 }));
+      var boardMesh = new THREE.Mesh(new THREE.CircleGeometry(BOARD_R + TEX_PAD, 64), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.7 }));
       boardMesh.position.set(0, BOARD_Y, BOARD_Z);
       boardMesh.receiveShadow = true;
       scene.add(boardMesh);
@@ -6054,7 +6113,7 @@ g.bowling = {
       renderer.domElement.addEventListener('touchstart', onDown, {passive:true});
       var keyCleanup = H(function(e){ if (e.key===' ') { e.preventDefault(); throwDart(); } });
 
-      t.setHint('Click / Space to throw when the reticle looks good — real physics, real 3D dartboard');
+      t.setHint('Click / Space to throw when the reticle looks good — real dartboard, real scoring');
       newMatch();
       raf = requestAnimationFrame(loop);
 
@@ -6073,7 +6132,7 @@ g.bowling = {
 
     return csa3DLoadGate(el, t, startGame);
   }
-};var O="coinslotarcade_streak",B="coinslotarcade_lastday",I="coinslotarcade_ach",F="coinslotarcade_played",q="coinslotarcade_bestcount";function W(){try{return Number(localStorage.getItem(O))||0}catch(e){return 0}}function N(){try{return JSON.parse(localStorage.getItem(F)||"[]")}catch(e){return[]}}function z(){try{return Number(localStorage.getItem(q))||0}catch(e){return 0}}function G(){try{return JSON.parse(localStorage.getItem(I)||"[]")}catch(e){return[]}}var j=[{key:"first",label:"First Coin",check:function(e){return e.played.length>=1}},{key:"hop5",label:"Cabinet Hopper",check:function(e){return e.played.length>=5}},{key:"collect15",label:"Collector",check:function(e){return e.played.length>=15}},{key:"highroll",label:"High Roller",check:function(e){return e.anyHighScore>=500}},{key:"comeback",label:"Comeback Kid",check:function(e){return e.bestCount>=3}},{key:"roll3",label:"On a Roll",check:function(e){return e.streak>=3}},{key:"regular7",label:"Regular",check:function(e){return e.streak>=7}}];function U(){var e,n={played:N(),streak:W(),bestCount:z(),anyHighScore:(e=0,M.forEach(function(n){var a=t(n);a>e&&(e=a)}),e)},a=[];return j.forEach(function(e){e.check(n)&&function(e){try{var t=G();if(-1===t.indexOf(e))return t.push(e),localStorage.setItem(I,JSON.stringify(t)),!0}catch(e){}return!1}(e.key)&&a.push(e.label)}),a}function Y(e){var t=document.createElement("div");t.className="toast",t.textContent=e,document.body.appendChild(t),requestAnimationFrame(function(){t.classList.add("show")}),setTimeout(function(){t.classList.remove("show"),setTimeout(function(){t.remove()},300)},2600)}function X(){var e=document.getElementById("trophyCase");if(e){var t=W(),n=G(),a="";t>1&&(a+='<span class="streak-badge">'+t+"-day streak</span>"),j.forEach(function(e){var t=-1!==n.indexOf(e.key);a+='<span class="ach-badge'+(t?" unlocked":"")+'" title="'+e.label+'">'+e.label+"</span>"}),e.innerHTML=a}}function K(e,t,n,a,r,o){g[e]={title:t,tagline:n,color:a,icon:r,category:"Trivia",hint:"Click an answer before the timer runs out",mount:function(t,n){var r=[{time:14,rounds:8},{time:9,rounds:10},{time:6,rounds:12}],i=1,l="1p",c=f,s=document.createElement("div");s.style.cssText="display:flex;flex-direction:column;gap:14px;width:100%;max-width:460px;",t.appendChild(s);var u=document.createElement("div");u.style.cssText="font-family:Baloo 2,sans-serif;font-weight:700;font-size:1.1rem;text-align:center;min-height:3.2em;display:flex;align-items:center;justify-content:center;color:"+R.ink+";";var d=document.createElement("div");d.style.cssText="height:6px;border-radius:4px;background:"+R.grid+";overflow:hidden;";var p=document.createElement("div");p.style.cssText="height:100%;background:"+a+";width:100%;",d.appendChild(p);var h=document.createElement("div");h.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px;";var y,m,v,g,b,x,w,k,M=document.createElement("div");function E(){"1p"===l?n.setHud("SCORE<b>"+v[1]+'</b><span style="margin-left:1rem">Q<b>'+(m+1)+"/"+r[i].rounds+"</b></span>"):n.setHud("P1<b>"+v[1]+'</b><span style="margin-left:1rem">P2<b>'+v[2]+'</b></span><span style="margin-left:1rem">'+(1===g?"P1":"P2")+"'s turn</span>")}function S(){y=function(e){for(var t=[],n=0;n<o.length;n++)t.push(n);for(n=t.length-1;n>0;n--){var a=Math.floor(Math.random()*(n+1)),r=t[n];t[n]=t[a],t[a]=r}return t.slice(0,Math.min(e,t.length))}(r[i].rounds),m=0,v={1:0,2:0},g=1,w=0,E(),P()}function P(){k=!1,M.textContent="",b=r[i].time;var e=o[y[m]];u.textContent=e.q,function(e){h.innerHTML="",e.a.forEach(function(e,t){var n=document.createElement("button");n.type="button",n.textContent=e,n.style.cssText="all:unset;cursor:pointer;padding:.7rem;border-radius:10px;background:"+R.grid+";color:"+R.ink+";text-align:center;font-weight:600;",n.addEventListener("click",function(){C(t)}),h.appendChild(n)})}(e),p.style.width="100%",x&&clearInterval(x),x=setInterval(function(){b-=.1,p.style.width=Math.max(0,b/r[i].time*100)+"%",b<=0&&(clearInterval(x),C(-1))},100)}function C(t){if(!k){k=!0,clearInterval(x);var a=o[y[m]],r=t===a.c;if(h.querySelectorAll("button").forEach(function(e,n){n===a.c?e.style.background=R.green:n===t&&(e.style.background=R.coral)}),r){var i=++w>=3?15:10;v["1p"===l?1:g]+=i,M.style.color=R.green,M.textContent=w>=3?"Correct! Streak x"+w+" bonus +"+i:"Correct! +"+i}else w=0,M.style.color=R.coral,M.textContent=-1===t?"Time's up! It was: "+a.a[a.c]:"Nope — it was: "+a.a[a.c];E(),setTimeout(function(){m++,"2p"===l&&(g=1===g?2:1),m>=y.length?function(){if("1p"===l)n.reportScore(e,v[1]),n.showOverlay("Round over!","Final score: "+v[1],"Play again",S);else{var t=v[1]===v[2]?"Draw!":v[1]>v[2]?"Player 1 wins!":"Player 2 wins!";n.reportScore(e,Math.max(v[1],v[2])),n.showOverlay(t,"P1: "+v[1]+" · P2: "+v[2],"Play again",S)}}():P()},1100)}}return M.style.cssText="text-align:center;font-weight:700;min-height:1.4em;",s.appendChild(u),s.appendChild(d),s.appendChild(h),s.appendChild(M),function e(){c.innerHTML='<span class="opt-group"><span class="opt-label">DIFFICULTY</span>'+["Easy","Medium","Hard"].map(function(e,t){return'<button type="button" class="opt-btn'+(t===i?" active":"")+'" data-diff="'+t+'">'+e+"</button>"}).join("")+'</span><span class="opt-group"><button type="button" class="opt-btn'+("1p"===l?" active":"")+'" data-mode="1p">1 Player</button><button type="button" class="opt-btn'+("2p"===l?" active":"")+'" data-mode="2p">2 Player</button></span>',c.querySelectorAll("[data-diff]").forEach(function(t){t.addEventListener("click",function(){i=Number(t.getAttribute("data-diff")),e(),S()})}),c.querySelectorAll("[data-mode]").forEach(function(t){t.addEventListener("click",function(){l=t.getAttribute("data-mode"),e(),S()})})}(),S(),function(){x&&clearInterval(x)}}}}var J,V,Q,Z,_,$='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.9.4-1.5 1-1.5 2.2"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>';K("triviaSports","Sports Trivia","Score, rules, and legends across every sport.",R.orange,$,[{q:"Which country has won the most FIFA World Cup titles?",a:["Brazil","Germany","Italy","Argentina"],c:0},{q:"How many players per side are on a basketball court at once?",a:["4","5","6","7"],c:1},{q:"In tennis, what is a score of zero called?",a:["Deuce","Love","Match","Set"],c:1},{q:"The Summer Olympic Games are held every how many years?",a:["2","3","4","5"],c:2},{q:"Which sport uses the term 'birdie' for a score under par?",a:["Golf","Tennis","Bowling","Boxing"],c:0},{q:"In baseball, how many strikes make an out?",a:["2","3","4","5"],c:1}]),K("triviaMovies","Movie Trivia","Lights, camera, questions from the silver screen.",R.magenta,$,[{q:"Who directed 'Jaws' and 'E.T.'?",a:["Steven Spielberg","George Lucas","James Cameron","Martin Scorsese"],c:0},{q:"Which movie features the song 'My Heart Will Go On'?",a:["Titanic","The Notebook","Ghost","La La Land"],c:0},{q:"In 'The Wizard of Oz,' what color are the famous slippers?",a:["Silver","Red","Gold","Blue"],c:1},{q:"Which actor played Iron Man in the Marvel films?",a:["Chris Evans","Robert Downey Jr.","Chris Hemsworth","Mark Ruffalo"],c:1},{q:"What is the fictional African nation in 'Black Panther'?",a:["Wakanda","Zamunda","Genovia","Latveria"],c:0},{q:"Who played the title role in 'Forrest Gump'?",a:["Tom Hanks","Tom Cruise","Kevin Costner","Robin Williams"],c:0}]),K("triviaScience","Science Trivia","Atoms, planets, and everything in between.",R.blue,$,[{q:"What is the chemical symbol for gold?",a:["Ag","Au","Gd","Go"],c:1},{q:"How many planets are in our solar system?",a:["7","8","9","10"],c:1},{q:"What gas do plants absorb from the atmosphere for photosynthesis?",a:["Oxygen","Nitrogen","Carbon dioxide","Hydrogen"],c:2},{q:"Which part of the cell is known as its powerhouse?",a:["Nucleus","Ribosome","Mitochondria","Golgi apparatus"],c:2},{q:"What force pulls objects toward the Earth?",a:["Magnetism","Gravity","Friction","Inertia"],c:1},{q:"Which planet is known as the Red Planet?",a:["Venus","Mars","Jupiter","Saturn"],c:1}]),K("triviaMusic","Music Trivia","Chart-toppers, instruments, and one-hit wonders.",R.violet,$,[{q:"Which instrument has 88 keys?",a:["Piano","Violin","Guitar","Flute"],c:0},{q:"Who is known as the 'King of Pop'?",a:["Elvis Presley","Michael Jackson","Prince","James Brown"],c:1},{q:'Which band released the album "Abbey Road"?',a:["The Rolling Stones","The Beach Boys","The Beatles","Led Zeppelin"],c:2},{q:"What genre is typically associated with Nashville, Tennessee?",a:["Jazz","Country","Reggae","Techno"],c:1},{q:"How many strings does a standard guitar have?",a:["4","5","6","7"],c:2},{q:"Which singer is known for the song 'Rolling in the Deep'?",a:["Adele","Beyonce","Rihanna","Taylor Swift"],c:0}]),K("triviaHistory","History Trivia","Dates, leaders, and turning points across the ages.",R.green,$,[{q:"In what year did World War II end?",a:["1943","1945","1947","1950"],c:1},{q:"Who was the first President of the United States?",a:["Thomas Jefferson","John Adams","George Washington","Abraham Lincoln"],c:2},{q:"The Great Wall is located in which country?",a:["Japan","China","India","Mongolia"],c:1},{q:"Which ancient civilization built the pyramids of Giza?",a:["Romans","Greeks","Egyptians","Aztecs"],c:2},{q:"The Declaration of Independence was signed in which year?",a:["1776","1789","1801","1812"],c:0},{q:"Who was the leader of the Soviet Union during World War II?",a:["Vladimir Lenin","Joseph Stalin","Nikita Khrushchev","Leon Trotsky"],c:1}]),V="Quick Reflex",Q="Wait for green, then click as fast as you can.",Z=R.teal,_='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',g[J="reactionQuick"]={title:V,tagline:Q,color:Z,icon:_,category:"Reflex",hint:"Click the pad the instant it turns green",mount:function(e,t){var n=[{minWait:1200,maxWait:2600,rounds:5},{minWait:800,maxWait:2e3,rounds:6},{minWait:500,maxWait:1400,rounds:7}],a=1,r="1p",o=f,i=document.createElement("div");i.style.cssText="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:360px;",e.appendChild(i);var l=document.createElement("button");l.type="button",l.style.cssText="all:unset;cursor:pointer;width:260px;height:260px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:Baloo 2,sans-serif;font-weight:800;font-size:1.3rem;color:#fff;text-align:center;user-select:none;",i.appendChild(l);var c,s,u,d,p,h,y,m,v=document.createElement("div");function g(e){return Math.round(e.reduce(function(e,t){return e+t},0)/e.length)}function b(){"1p"===r?t.setHud("ROUND<b>"+(s+1)+"/"+n[a].rounds+"</b>"+(h?'<span style="margin-left:1rem">BEST<b>'+h+"ms</b></span>":"")):t.setHud("P1 avg<b>"+(m[1].length?g(m[1])+"ms":"—")+'</b><span style="margin-left:1rem">P2 avg<b>'+(m[2].length?g(m[2])+"ms":"—")+"</b></span>")}function x(){s=0,u=[],h=0,y=1,m={1:[],2:[]},l.style.background=R.grid,l.textContent="Get ready…",v.textContent="",b(),setTimeout(w,700)}function w(){c="waiting",l.style.background=R.grid,l.textContent="2p"===r?"Wait for green — P"+y:"Wait for green…";var e=n[a].minWait+Math.random()*(n[a].maxWait-n[a].minWait);d=setTimeout(function(){c="go",p=performance.now(),l.style.background=R.green,l.textContent="CLICK!"},e)}function k(){"2p"===r&&(y=1===y?2:1),++s>=n[a].rounds?function(){if("1p"===r){var e=Math.max(0,1e3-g(u));t.reportScore(J,e),t.showOverlay("Nice reflexes!","Average: "+g(u)+"ms (score "+e+")","Play again",x)}else{var n=m[1].length?g(m[1]):9999,a=m[2].length?g(m[2]):9999,o=n===a?"Draw!":n<a?"Player 1 wins!":"Player 2 wins!";t.reportScore(J,Math.max(0,1e3-Math.min(n,a))),t.showOverlay(o,"P1 avg: "+n+"ms · P2 avg: "+a+"ms","Play again",x)}}():w()}return v.style.cssText="text-align:center;font-weight:700;min-height:1.4em;color:"+R.ink+";",i.appendChild(v),l.addEventListener("pointerdown",function(){if("waiting"===c)clearTimeout(d),c="idle",l.style.background=R.coral,l.textContent="Too soon!",v.style.color=R.coral,v.textContent="Too soon — wait for green next time",setTimeout(k,1e3);else if("go"===c){var e=Math.round(performance.now()-p);c="idle";var t="1p"===r?1:y;"1p"===r?(u.push(e),!h||e<h?(v.style.color=R.green,v.textContent="New best! "+e+"ms",h=e):(v.style.color=R.ink,v.textContent=e+"ms (best "+h+"ms)")):(m[t].push(e),v.style.color=R.ink,v.textContent="P"+t+": "+e+"ms"),l.style.background=R.grid,l.textContent=e+"ms",b(),setTimeout(k,900)}}),function e(){o.innerHTML='<span class="opt-group"><span class="opt-label">SPEED</span>'+["Relaxed","Quick","Lightning"].map(function(e,t){return'<button type="button" class="opt-btn'+(t===a?" active":"")+'" data-diff="'+t+'">'+e+"</button>"}).join("")+'</span><span class="opt-group"><button type="button" class="opt-btn'+("1p"===r?" active":"")+'" data-mode="1p">1 Player</button><button type="button" class="opt-btn'+("2p"===r?" active":"")+'" data-mode="2p">2 Player</button></span>',o.querySelectorAll("[data-diff]").forEach(function(t){t.addEventListener("click",function(){a=Number(t.getAttribute("data-diff")),e(),x()})}),o.querySelectorAll("[data-mode]").forEach(function(t){t.addEventListener("click",function(){r=t.getAttribute("data-mode"),e(),x()})})}(),x(),function(){clearTimeout(d)}}};g.whack = {
+};;var O="coinslotarcade_streak",B="coinslotarcade_lastday",I="coinslotarcade_ach",F="coinslotarcade_played",q="coinslotarcade_bestcount";function W(){try{return Number(localStorage.getItem(O))||0}catch(e){return 0}}function N(){try{return JSON.parse(localStorage.getItem(F)||"[]")}catch(e){return[]}}function z(){try{return Number(localStorage.getItem(q))||0}catch(e){return 0}}function G(){try{return JSON.parse(localStorage.getItem(I)||"[]")}catch(e){return[]}}var j=[{key:"first",label:"First Coin",check:function(e){return e.played.length>=1}},{key:"hop5",label:"Cabinet Hopper",check:function(e){return e.played.length>=5}},{key:"collect15",label:"Collector",check:function(e){return e.played.length>=15}},{key:"highroll",label:"High Roller",check:function(e){return e.anyHighScore>=500}},{key:"comeback",label:"Comeback Kid",check:function(e){return e.bestCount>=3}},{key:"roll3",label:"On a Roll",check:function(e){return e.streak>=3}},{key:"regular7",label:"Regular",check:function(e){return e.streak>=7}}];function U(){var e,n={played:N(),streak:W(),bestCount:z(),anyHighScore:(e=0,M.forEach(function(n){var a=t(n);a>e&&(e=a)}),e)},a=[];return j.forEach(function(e){e.check(n)&&function(e){try{var t=G();if(-1===t.indexOf(e))return t.push(e),localStorage.setItem(I,JSON.stringify(t)),!0}catch(e){}return!1}(e.key)&&a.push(e.label)}),a}function Y(e){var t=document.createElement("div");t.className="toast",t.textContent=e,document.body.appendChild(t),requestAnimationFrame(function(){t.classList.add("show")}),setTimeout(function(){t.classList.remove("show"),setTimeout(function(){t.remove()},300)},2600)}function X(){var e=document.getElementById("trophyCase");if(e){var t=W(),n=G(),a="";t>1&&(a+='<span class="streak-badge">'+t+"-day streak</span>"),j.forEach(function(e){var t=-1!==n.indexOf(e.key);a+='<span class="ach-badge'+(t?" unlocked":"")+'" title="'+e.label+'">'+e.label+"</span>"}),e.innerHTML=a}}function K(e,t,n,a,r,o){g[e]={title:t,tagline:n,color:a,icon:r,category:"Trivia",hint:"Click an answer before the timer runs out",mount:function(t,n){var r=[{time:14,rounds:8},{time:9,rounds:10},{time:6,rounds:12}],i=1,l="1p",c=f,s=document.createElement("div");s.style.cssText="display:flex;flex-direction:column;gap:14px;width:100%;max-width:460px;",t.appendChild(s);var u=document.createElement("div");u.style.cssText="font-family:Baloo 2,sans-serif;font-weight:700;font-size:1.1rem;text-align:center;min-height:3.2em;display:flex;align-items:center;justify-content:center;color:"+R.ink+";";var d=document.createElement("div");d.style.cssText="height:6px;border-radius:4px;background:"+R.grid+";overflow:hidden;";var p=document.createElement("div");p.style.cssText="height:100%;background:"+a+";width:100%;",d.appendChild(p);var h=document.createElement("div");h.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px;";var y,m,v,g,b,x,w,k,M=document.createElement("div");function E(){"1p"===l?n.setHud("SCORE<b>"+v[1]+'</b><span style="margin-left:1rem">Q<b>'+(m+1)+"/"+r[i].rounds+"</b></span>"):n.setHud("P1<b>"+v[1]+'</b><span style="margin-left:1rem">P2<b>'+v[2]+'</b></span><span style="margin-left:1rem">'+(1===g?"P1":"P2")+"'s turn</span>")}function S(){y=function(e){for(var t=[],n=0;n<o.length;n++)t.push(n);for(n=t.length-1;n>0;n--){var a=Math.floor(Math.random()*(n+1)),r=t[n];t[n]=t[a],t[a]=r}return t.slice(0,Math.min(e,t.length))}(r[i].rounds),m=0,v={1:0,2:0},g=1,w=0,E(),P()}function P(){k=!1,M.textContent="",b=r[i].time;var e=o[y[m]];u.textContent=e.q,function(e){h.innerHTML="",e.a.forEach(function(e,t){var n=document.createElement("button");n.type="button",n.textContent=e,n.style.cssText="all:unset;cursor:pointer;padding:.7rem;border-radius:10px;background:"+R.grid+";color:"+R.ink+";text-align:center;font-weight:600;",n.addEventListener("click",function(){C(t)}),h.appendChild(n)})}(e),p.style.width="100%",x&&clearInterval(x),x=setInterval(function(){b-=.1,p.style.width=Math.max(0,b/r[i].time*100)+"%",b<=0&&(clearInterval(x),C(-1))},100)}function C(t){if(!k){k=!0,clearInterval(x);var a=o[y[m]],r=t===a.c;if(h.querySelectorAll("button").forEach(function(e,n){n===a.c?e.style.background=R.green:n===t&&(e.style.background=R.coral)}),r){var i=++w>=3?15:10;v["1p"===l?1:g]+=i,M.style.color=R.green,M.textContent=w>=3?"Correct! Streak x"+w+" bonus +"+i:"Correct! +"+i}else w=0,M.style.color=R.coral,M.textContent=-1===t?"Time's up! It was: "+a.a[a.c]:"Nope — it was: "+a.a[a.c];E(),setTimeout(function(){m++,"2p"===l&&(g=1===g?2:1),m>=y.length?function(){if("1p"===l)n.reportScore(e,v[1]),n.showOverlay("Round over!","Final score: "+v[1],"Play again",S);else{var t=v[1]===v[2]?"Draw!":v[1]>v[2]?"Player 1 wins!":"Player 2 wins!";n.reportScore(e,Math.max(v[1],v[2])),n.showOverlay(t,"P1: "+v[1]+" · P2: "+v[2],"Play again",S)}}():P()},1100)}}return M.style.cssText="text-align:center;font-weight:700;min-height:1.4em;",s.appendChild(u),s.appendChild(d),s.appendChild(h),s.appendChild(M),function e(){c.innerHTML='<span class="opt-group"><span class="opt-label">DIFFICULTY</span>'+["Easy","Medium","Hard"].map(function(e,t){return'<button type="button" class="opt-btn'+(t===i?" active":"")+'" data-diff="'+t+'">'+e+"</button>"}).join("")+'</span><span class="opt-group"><button type="button" class="opt-btn'+("1p"===l?" active":"")+'" data-mode="1p">1 Player</button><button type="button" class="opt-btn'+("2p"===l?" active":"")+'" data-mode="2p">2 Player</button></span>',c.querySelectorAll("[data-diff]").forEach(function(t){t.addEventListener("click",function(){i=Number(t.getAttribute("data-diff")),e(),S()})}),c.querySelectorAll("[data-mode]").forEach(function(t){t.addEventListener("click",function(){l=t.getAttribute("data-mode"),e(),S()})})}(),S(),function(){x&&clearInterval(x)}}}}var J,V,Q,Z,_,$='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.9.4-1.5 1-1.5 2.2"/><circle cx="12" cy="17" r=".6" fill="currentColor" stroke="none"/></svg>';K("triviaSports","Sports Trivia","Score, rules, and legends across every sport.",R.orange,$,[{q:"Which country has won the most FIFA World Cup titles?",a:["Brazil","Germany","Italy","Argentina"],c:0},{q:"How many players per side are on a basketball court at once?",a:["4","5","6","7"],c:1},{q:"In tennis, what is a score of zero called?",a:["Deuce","Love","Match","Set"],c:1},{q:"The Summer Olympic Games are held every how many years?",a:["2","3","4","5"],c:2},{q:"Which sport uses the term 'birdie' for a score under par?",a:["Golf","Tennis","Bowling","Boxing"],c:0},{q:"In baseball, how many strikes make an out?",a:["2","3","4","5"],c:1}]),K("triviaMovies","Movie Trivia","Lights, camera, questions from the silver screen.",R.magenta,$,[{q:"Who directed 'Jaws' and 'E.T.'?",a:["Steven Spielberg","George Lucas","James Cameron","Martin Scorsese"],c:0},{q:"Which movie features the song 'My Heart Will Go On'?",a:["Titanic","The Notebook","Ghost","La La Land"],c:0},{q:"In 'The Wizard of Oz,' what color are the famous slippers?",a:["Silver","Red","Gold","Blue"],c:1},{q:"Which actor played Iron Man in the Marvel films?",a:["Chris Evans","Robert Downey Jr.","Chris Hemsworth","Mark Ruffalo"],c:1},{q:"What is the fictional African nation in 'Black Panther'?",a:["Wakanda","Zamunda","Genovia","Latveria"],c:0},{q:"Who played the title role in 'Forrest Gump'?",a:["Tom Hanks","Tom Cruise","Kevin Costner","Robin Williams"],c:0}]),K("triviaScience","Science Trivia","Atoms, planets, and everything in between.",R.blue,$,[{q:"What is the chemical symbol for gold?",a:["Ag","Au","Gd","Go"],c:1},{q:"How many planets are in our solar system?",a:["7","8","9","10"],c:1},{q:"What gas do plants absorb from the atmosphere for photosynthesis?",a:["Oxygen","Nitrogen","Carbon dioxide","Hydrogen"],c:2},{q:"Which part of the cell is known as its powerhouse?",a:["Nucleus","Ribosome","Mitochondria","Golgi apparatus"],c:2},{q:"What force pulls objects toward the Earth?",a:["Magnetism","Gravity","Friction","Inertia"],c:1},{q:"Which planet is known as the Red Planet?",a:["Venus","Mars","Jupiter","Saturn"],c:1}]),K("triviaMusic","Music Trivia","Chart-toppers, instruments, and one-hit wonders.",R.violet,$,[{q:"Which instrument has 88 keys?",a:["Piano","Violin","Guitar","Flute"],c:0},{q:"Who is known as the 'King of Pop'?",a:["Elvis Presley","Michael Jackson","Prince","James Brown"],c:1},{q:'Which band released the album "Abbey Road"?',a:["The Rolling Stones","The Beach Boys","The Beatles","Led Zeppelin"],c:2},{q:"What genre is typically associated with Nashville, Tennessee?",a:["Jazz","Country","Reggae","Techno"],c:1},{q:"How many strings does a standard guitar have?",a:["4","5","6","7"],c:2},{q:"Which singer is known for the song 'Rolling in the Deep'?",a:["Adele","Beyonce","Rihanna","Taylor Swift"],c:0}]),K("triviaHistory","History Trivia","Dates, leaders, and turning points across the ages.",R.green,$,[{q:"In what year did World War II end?",a:["1943","1945","1947","1950"],c:1},{q:"Who was the first President of the United States?",a:["Thomas Jefferson","John Adams","George Washington","Abraham Lincoln"],c:2},{q:"The Great Wall is located in which country?",a:["Japan","China","India","Mongolia"],c:1},{q:"Which ancient civilization built the pyramids of Giza?",a:["Romans","Greeks","Egyptians","Aztecs"],c:2},{q:"The Declaration of Independence was signed in which year?",a:["1776","1789","1801","1812"],c:0},{q:"Who was the leader of the Soviet Union during World War II?",a:["Vladimir Lenin","Joseph Stalin","Nikita Khrushchev","Leon Trotsky"],c:1}]),V="Quick Reflex",Q="Wait for green, then click as fast as you can.",Z=R.teal,_='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>',g[J="reactionQuick"]={title:V,tagline:Q,color:Z,icon:_,category:"Reflex",hint:"Click the pad the instant it turns green",mount:function(e,t){var n=[{minWait:1200,maxWait:2600,rounds:5},{minWait:800,maxWait:2e3,rounds:6},{minWait:500,maxWait:1400,rounds:7}],a=1,r="1p",o=f,i=document.createElement("div");i.style.cssText="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:360px;",e.appendChild(i);var l=document.createElement("button");l.type="button",l.style.cssText="all:unset;cursor:pointer;width:260px;height:260px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:Baloo 2,sans-serif;font-weight:800;font-size:1.3rem;color:#fff;text-align:center;user-select:none;",i.appendChild(l);var c,s,u,d,p,h,y,m,v=document.createElement("div");function g(e){return Math.round(e.reduce(function(e,t){return e+t},0)/e.length)}function b(){"1p"===r?t.setHud("ROUND<b>"+(s+1)+"/"+n[a].rounds+"</b>"+(h?'<span style="margin-left:1rem">BEST<b>'+h+"ms</b></span>":"")):t.setHud("P1 avg<b>"+(m[1].length?g(m[1])+"ms":"—")+'</b><span style="margin-left:1rem">P2 avg<b>'+(m[2].length?g(m[2])+"ms":"—")+"</b></span>")}function x(){s=0,u=[],h=0,y=1,m={1:[],2:[]},l.style.background=R.grid,l.textContent="Get ready…",v.textContent="",b(),setTimeout(w,700)}function w(){c="waiting",l.style.background=R.grid,l.textContent="2p"===r?"Wait for green — P"+y:"Wait for green…";var e=n[a].minWait+Math.random()*(n[a].maxWait-n[a].minWait);d=setTimeout(function(){c="go",p=performance.now(),l.style.background=R.green,l.textContent="CLICK!"},e)}function k(){"2p"===r&&(y=1===y?2:1),++s>=n[a].rounds?function(){if("1p"===r){var e=Math.max(0,1e3-g(u));t.reportScore(J,e),t.showOverlay("Nice reflexes!","Average: "+g(u)+"ms (score "+e+")","Play again",x)}else{var n=m[1].length?g(m[1]):9999,a=m[2].length?g(m[2]):9999,o=n===a?"Draw!":n<a?"Player 1 wins!":"Player 2 wins!";t.reportScore(J,Math.max(0,1e3-Math.min(n,a))),t.showOverlay(o,"P1 avg: "+n+"ms · P2 avg: "+a+"ms","Play again",x)}}():w()}return v.style.cssText="text-align:center;font-weight:700;min-height:1.4em;color:"+R.ink+";",i.appendChild(v),l.addEventListener("pointerdown",function(){if("waiting"===c)clearTimeout(d),c="idle",l.style.background=R.coral,l.textContent="Too soon!",v.style.color=R.coral,v.textContent="Too soon — wait for green next time",setTimeout(k,1e3);else if("go"===c){var e=Math.round(performance.now()-p);c="idle";var t="1p"===r?1:y;"1p"===r?(u.push(e),!h||e<h?(v.style.color=R.green,v.textContent="New best! "+e+"ms",h=e):(v.style.color=R.ink,v.textContent=e+"ms (best "+h+"ms)")):(m[t].push(e),v.style.color=R.ink,v.textContent="P"+t+": "+e+"ms"),l.style.background=R.grid,l.textContent=e+"ms",b(),setTimeout(k,900)}}),function e(){o.innerHTML='<span class="opt-group"><span class="opt-label">SPEED</span>'+["Relaxed","Quick","Lightning"].map(function(e,t){return'<button type="button" class="opt-btn'+(t===a?" active":"")+'" data-diff="'+t+'">'+e+"</button>"}).join("")+'</span><span class="opt-group"><button type="button" class="opt-btn'+("1p"===r?" active":"")+'" data-mode="1p">1 Player</button><button type="button" class="opt-btn'+("2p"===r?" active":"")+'" data-mode="2p">2 Player</button></span>',o.querySelectorAll("[data-diff]").forEach(function(t){t.addEventListener("click",function(){a=Number(t.getAttribute("data-diff")),e(),x()})}),o.querySelectorAll("[data-mode]").forEach(function(t){t.addEventListener("click",function(){r=t.getAttribute("data-mode"),e(),x()})})}(),x(),function(){clearTimeout(d)}}};g.whack = {
   title: "Byte Whacker",
   tagline: "Smash glitching bytes, dodge the bombs, chain golden combos.",
   color: R.coral,
