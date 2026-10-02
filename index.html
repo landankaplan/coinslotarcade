@@ -4005,204 +4005,405 @@ g.boxing = {
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3.2"/><path d="M11 11l6 6"/><circle cx="19" cy="19" r="2.2"/><path d="M4 20l3-3"/></svg>',
   mount: function(el, t) {
-    var DIFFS = [
-      { name: "Easy", window: 950, gap: 1350 },
-      { name: "Medium", window: 700, gap: 1000 },
-      { name: "Hard", window: 470, gap: 760 }
-    ];
-    var CUES = [
-      { key: "ArrowLeft", label: "JAB LEFT", p1: "a", p2: "arrowleft" },
-      { key: "ArrowRight", label: "JAB RIGHT", p1: "d", p2: "arrowright" },
-      { key: "ArrowDown", label: "DUCK", p1: "s", p2: "arrowdown" },
-      { key: " ", label: "BODY SHOT", p1: "w", p2: "arrowup" }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var bar = document.createElement("div"); bar.className = "opt-bar"; el.appendChild(bar);
+    function startGame3D(){
+      var DIFFS = [
+        { name: "Easy", window: 950, gap: 1350 },
+        { name: "Medium", window: 700, gap: 1000 },
+        { name: "Hard", window: 470, gap: 760 }
+      ];
+      var CUES = [
+        { key: "ArrowLeft", label: "JAB LEFT", p1: "a", p2: "arrowleft" },
+        { key: "ArrowRight", label: "JAB RIGHT", p1: "d", p2: "arrowright" },
+        { key: "ArrowDown", label: "DUCK", p1: "s", p2: "arrowdown" },
+        { key: " ", label: "BODY SHOT", p1: "w", p2: "arrowup" }
+      ];
+      var diffIdx = 1, mode = "1p";
 
-    var W = 360, H_ = 260;
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
+      var hp, oppHp, hits, misses, cueCount, waiting, resolved, cue, cueStart, pendingTimer, p1Wins, p2Wins, streak, particles, shake, punchAnim, koFlag, raf, last;
 
-    var hp, oppHp, hits, misses, cueCount, waiting, resolved, cue, cueStart, pendingTimer, p1Wins, p2Wins, streak, particles, shake, punchAnim, koFlag, raf;
-
-    function reset() {
-      hp = 100; oppHp = 100; hits = 0; misses = 0; cueCount = 0; streak = 0;
-      p1Wins = 0; p2Wins = 0; particles = []; shake = 0; punchAnim = 0; koFlag = false;
-      updateHud();
-      nextCue();
-    }
-
-    function updateHud() {
-      if (mode === "1p") {
-        t.setHud("HITS<b>" + hits + "</b>" + '<span style="margin-left:1rem">MISSES<b>' + misses + "</b></span>" +
-          '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>");
-      } else {
-        t.setHud("P1<b>" + p1Wins + "</b>" + '<span style="margin-left:1rem">P2<b>' + p2Wins + "</b></span>");
+      // ---- punch-reach physics: one Matter body drives the glove's forward
+      // snap + return, gravity-shaped exactly like the flight-arc games' bulge
+      // (a single `punchAnim` counter in the original already drives every
+      // fighter's punch pose at once, so one shared body matches that) ----
+      Matter.Resolver._restingThresh = 0.001;
+      var punchEngine = Matter.Engine.create();
+      punchEngine.gravity.x = 0; punchEngine.gravity.y = 1;
+      var punchBody = Matter.Bodies.circle(0, 0, 2, { frictionAir: 0, friction: 0, restitution: 0 });
+      Matter.Composite.add(punchEngine.world, punchBody);
+      var PUNCH_DUR = 10, PUNCH_REACH = 34;
+      function firePunch() {
+        var grav = 8 * PUNCH_REACH / (PUNCH_DUR * PUNCH_DUR);
+        var vy0 = 4 * PUNCH_REACH / PUNCH_DUR;
+        Matter.Body.setPosition(punchBody, { x: 0, y: 0 });
+        Matter.Body.setVelocity(punchBody, { x: 0, y: -vy0 });
+        punchEngine.gravity.y = grav;
       }
-    }
-
-    function burst(x, y, color, n) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4;
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color: color });
+      function stepPunch() {
+        Matter.Engine.update(punchEngine, 16.67);
+        return Math.max(0, -punchBody.position.y);
       }
-    }
 
-    function nextCue() {
-      waiting = false; resolved = false; cue = null;
-      clearTimeout(pendingTimer);
-      pendingTimer = setTimeout(throwCue, 450 + Math.random() * DIFFS[diffIdx].gap);
-    }
-
-    function throwCue() {
-      cue = CUES[Math.floor(Math.random() * CUES.length)];
-      waiting = true; resolved = false; cueStart = performance.now();
-      pendingTimer = setTimeout(function () { if (waiting && !resolved) missCue(); }, DIFFS[diffIdx].window);
-    }
-
-    function hitCue(who) {
-      if (!waiting || resolved) return;
-      resolved = true; waiting = false;
-      clearTimeout(pendingTimer);
-      var rt = performance.now() - cueStart;
-      cueCount++;
-      punchAnim = 10;
-      if (mode === "1p") {
-        streak++;
-        var speedBonus = Math.round(Math.max(0, (DIFFS[diffIdx].window - rt) / DIFFS[diffIdx].window) * 10);
-        var dmg = 8 + speedBonus + Math.min(streak, 8);
-        oppHp = Math.max(0, oppHp - dmg);
-        hits++;
-        burst(270, 110, R.yellow, 14);
-        shake = 5;
+      function reset() {
+        hp = 100; oppHp = 100; hits = 0; misses = 0; cueCount = 0; streak = 0;
+        p1Wins = 0; p2Wins = 0; particles = []; shake = 0; punchAnim = 0; koFlag = false;
         updateHud();
-        if (oppHp <= 0) { koFlag = true; return finish(); }
+        nextCue();
+      }
+
+      function updateHud() {
+        if (mode === "1p") {
+          t.setHud("HITS<b>" + hits + "</b>" + '<span style="margin-left:1rem">MISSES<b>' + misses + "</b></span>" +
+            '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>");
+        } else {
+          t.setHud("P1<b>" + p1Wins + "</b>" + '<span style="margin-left:1rem">P2<b>' + p2Wins + "</b></span>");
+        }
+      }
+
+      function burst(wx, wy, wz, colorHex, n) {
+        var c = new THREE.Color(colorHex);
+        for (var i = 0; i < n; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1 });
+          var m = new THREE.Mesh(new THREE.SphereGeometry(1.6, 6, 6), mat);
+          m.position.set(wx, wy, wz);
+          var a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 4;
+          scene.add(m);
+          particles.push({ mesh: m, vx: Math.cos(a) * sp * 0.6, vy: Math.sin(a) * sp * 0.6, vz: (Math.random() - 0.5) * sp, life: 1, color: colorHex });
+        }
+      }
+
+      function nextCue() {
+        waiting = false; resolved = false; cue = null;
+        clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(throwCue, 450 + Math.random() * DIFFS[diffIdx].gap);
+      }
+
+      function throwCue() {
+        cue = CUES[Math.floor(Math.random() * CUES.length)];
+        waiting = true; resolved = false; cueStart = performance.now();
+        pendingTimer = setTimeout(function () { if (waiting && !resolved) missCue(); }, DIFFS[diffIdx].window);
+      }
+
+      function hitCue(who) {
+        if (!waiting || resolved) return;
+        resolved = true; waiting = false;
+        clearTimeout(pendingTimer);
+        var rt = performance.now() - cueStart;
+        cueCount++;
+        punchAnim = 10;
+        lastCueKey = cue.key;
+        firePunch();
+        if (mode === "1p") {
+          streak++;
+          var speedBonus = Math.round(Math.max(0, (DIFFS[diffIdx].window - rt) / DIFFS[diffIdx].window) * 10);
+          var dmg = 8 + speedBonus + Math.min(streak, 8);
+          oppHp = Math.max(0, oppHp - dmg);
+          hits++;
+          burst(OPP_X - 10, 46, 0, R.yellow, 14);
+          shake = 5;
+          updateHud();
+          if (oppHp <= 0) { koFlag = true; return finish(); }
+          if (cueCount >= 15) return finish();
+          setTimeout(nextCue, 380);
+        } else {
+          if (who === 1) p1Wins++; else p2Wins++;
+          streak = 0;
+          burst(0, 40, 0, R.green, 10);
+          updateHud();
+          if (cueCount >= 15) return finish();
+          setTimeout(nextCue, 380);
+        }
+      }
+
+      function missCue() {
+        if (!waiting || resolved) return;
+        resolved = true; waiting = false;
+        cueCount++; misses++; streak = 0;
+        if (mode === "1p") {
+          hp = Math.max(0, hp - 12);
+          shake = 8;
+          burst(PLAYER_X + 10, 46, 0, R.coral, 10);
+          updateHud();
+          if (hp <= 0) { koFlag = true; return finish(); }
+        }
         if (cueCount >= 15) return finish();
         setTimeout(nextCue, 380);
-      } else {
-        if (who === 1) p1Wins++; else p2Wins++;
-        streak = 0;
-        burst(180, 130, R.green, 10);
-        updateHud();
-        if (cueCount >= 15) return finish();
-        setTimeout(nextCue, 380);
-      }
-    }
-
-    function missCue() {
-      if (!waiting || resolved) return;
-      resolved = true; waiting = false;
-      cueCount++; misses++; streak = 0;
-      if (mode === "1p") {
-        hp = Math.max(0, hp - 12);
-        shake = 8;
-        burst(90, 110, R.coral, 10);
-        updateHud();
-        if (hp <= 0) { koFlag = true; return finish(); }
-      }
-      if (cueCount >= 15) return finish();
-      setTimeout(nextCue, 380);
-    }
-
-    function wrongPunch() {
-      if (!waiting || resolved) return;
-      missCue();
-    }
-
-    function finish() {
-      clearTimeout(pendingTimer);
-      if (mode === "1p") {
-        var points = hits * 10 + Math.max(0, oppHp === 0 ? 40 : 0);
-        t.reportScore("boxing", points);
-        if (koFlag && oppHp <= 0) t.showOverlay("KO! You win!", "Landed " + hits + " of " + cueCount + " cues", "Play again", reset);
-        else if (koFlag && hp <= 0) t.showOverlay("You got KO'd", "Landed " + hits + " of " + cueCount + " cues", "Rematch", reset);
-        else t.showOverlay("Round over", "Hit " + hits + " of " + cueCount + " cues · opponent at " + oppHp + " HP", "Play again", reset);
-      } else {
-        var win = p1Wins === p2Wins ? "Draw!" : (p1Wins > p2Wins ? "Player 1 wins!" : "Player 2 wins!");
-        t.reportScore("boxing", 100 * Math.max(p1Wins, p2Wins));
-        t.showOverlay(win, "P1: " + p1Wins + " · P2: " + p2Wins, "Play again", reset);
-      }
-    }
-
-    var keyCleanup = H(function (e) {
-      var k = e.key;
-      if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", " ", "a", "A", "s", "S", "d", "D", "w", "W"].indexOf(k) > -1) e.preventDefault();
-      if (!waiting || resolved) return;
-      if (mode === "1p") {
-        if (k === cue.key) hitCue(1);
-        else if (["ArrowLeft", "ArrowRight", "ArrowDown", " "].indexOf(k) > -1) wrongPunch();
-      } else {
-        var lk = k.toLowerCase();
-        if (lk === cue.p1) hitCue(1);
-        else if (lk === cue.p2) hitCue(2);
-      }
-    });
-
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">SPEED</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player Duel</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); }); });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
-    }
-    renderOpts();
-    reset();
-
-    function drawFighter(x, y, colorMain, facing, punching) {
-      ctx.save(); ctx.translate(x, y);
-      ctx.fillStyle = colorMain;
-      L(ctx, -14, -30, 28, 46, 8); ctx.fill();
-      ctx.beginPath(); ctx.arc(0, -42, 12, 0, Math.PI * 2); ctx.fill();
-      // glove
-      ctx.fillStyle = R.ink;
-      var reach = punching ? 26 * facing : 8 * facing;
-      ctx.beginPath(); ctx.arc(reach, -14, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
-
-    raf = requestAnimationFrame(function loop() {
-      if (punchAnim > 0) punchAnim--;
-      if (shake > 0) { shake *= 0.82; if (shake < 0.3) shake = 0; }
-      particles.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.035; });
-      particles = particles.filter(function (p) { return p.life > 0; });
-
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      ctx.save(); ctx.translate(sx, 0);
-      ctx.fillStyle = R.bg; ctx.fillRect(-10, -10, W + 20, H_ + 20);
-      ctx.strokeStyle = R.grid; ctx.strokeRect(20, 20, W - 40, H_ - 60);
-
-      drawFighter(90, 190, R.orange, 1, punchAnim > 4 && mode === "1p");
-      drawFighter(270, 190, R.blue, -1, punchAnim > 4);
-
-      if (mode === "1p") {
-        // HP bars
-        ctx.fillStyle = R.dim; ctx.fillRect(20, 8, 150, 8);
-        ctx.fillStyle = R.green; ctx.fillRect(20, 8, 150 * (hp / 100), 8);
-        ctx.fillStyle = R.dim; ctx.fillRect(W - 170, 8, 150, 8);
-        ctx.fillStyle = R.coral; ctx.fillRect(W - 170 + 150 * (1 - oppHp / 100), 8, 150 * (oppHp / 100), 8);
       }
 
-      ctx.fillStyle = waiting ? R.yellow : "rgba(255,255,255,.35)";
-      ctx.font = "800 24px Baloo 2, sans-serif"; ctx.textAlign = "center";
-      ctx.fillText(waiting ? cue.label + "!" : "Ready...", W / 2, 60);
+      function wrongPunch() {
+        if (!waiting || resolved) return;
+        missCue();
+      }
 
-      particles.forEach(function (p) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill(); });
-      ctx.globalAlpha = 1;
-      ctx.restore();
+      function finish() {
+        clearTimeout(pendingTimer);
+        if (mode === "1p") {
+          var points = hits * 10 + Math.max(0, oppHp === 0 ? 40 : 0);
+          t.reportScore("boxing", points);
+          if (koFlag && oppHp <= 0) t.showOverlay("KO! You win!", "Landed " + hits + " of " + cueCount + " cues", "Play again", reset);
+          else if (koFlag && hp <= 0) t.showOverlay("You got KO'd", "Landed " + hits + " of " + cueCount + " cues", "Rematch", reset);
+          else t.showOverlay("Round over", "Hit " + hits + " of " + cueCount + " cues · opponent at " + oppHp + " HP", "Play again", reset);
+        } else {
+          var win = p1Wins === p2Wins ? "Draw!" : (p1Wins > p2Wins ? "Player 1 wins!" : "Player 2 wins!");
+          t.reportScore("boxing", 100 * Math.max(p1Wins, p2Wins));
+          t.showOverlay(win, "P1: " + p1Wins + " · P2: " + p2Wins, "Play again", reset);
+        }
+      }
 
+      var lastCueKey = null;
+
+      var keyCleanup = H(function (e) {
+        var k = e.key;
+        if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", " ", "a", "A", "s", "S", "d", "D", "w", "W"].indexOf(k) > -1) e.preventDefault();
+        if (!waiting || resolved) return;
+        if (mode === "1p") {
+          if (k === cue.key) hitCue(1);
+          else if (["ArrowLeft", "ArrowRight", "ArrowDown", " "].indexOf(k) > -1) wrongPunch();
+        } else {
+          var lk = k.toLowerCase();
+          if (lk === cue.p1) hitCue(1);
+          else if (lk === cue.p2) hitCue(2);
+        }
+      });
+
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
+
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">SPEED</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player Duel</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); }); });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+      }
+      renderOpts();
+
+      // ---------------- 3D rendering ----------------
+      var PLAYER_X = -65, OPP_X = 65;
+
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:360px;aspect-ratio:360/260;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var VIEW_W = 360, VIEW_H = 260;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x1a0f0f, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x1a0f0f, 260, 700);
+
+      var camera = new THREE.PerspectiveCamera(50, VIEW_W / VIEW_H, 1, 1500);
+      camera.position.set(0, 70, 190);
+      camera.lookAt(0, 35, 0);
+
+      scene.add(new THREE.AmbientLight(0xffe0cf, 0.55));
+      var spot = new THREE.DirectionalLight(0xffffff, 1.15);
+      spot.position.set(0, 220, 120);
+      spot.castShadow = true;
+      spot.shadow.mapSize.set(1024, 1024);
+      scene.add(spot);
+
+      var mat_floor = new THREE.Mesh(new THREE.PlaneGeometry(220, 170), new THREE.MeshStandardMaterial({ color: 0x3a1c22, roughness: 0.9 }));
+      mat_floor.rotation.x = -Math.PI / 2;
+      mat_floor.receiveShadow = true;
+      scene.add(mat_floor);
+      var apron = new THREE.Mesh(new THREE.PlaneGeometry(190, 140), new THREE.MeshStandardMaterial({ color: 0x5c2a30, roughness: 0.85 }));
+      apron.rotation.x = -Math.PI / 2;
+      apron.position.y = 0.1;
+      scene.add(apron);
+
+      // ring posts + ropes
+      var postMat = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.4 });
+      var postGeom = new THREE.CylinderGeometry(3, 3, 64, 10);
+      [[-95, -62], [95, -62], [-95, 62], [95, 62]].forEach(function (p) {
+        var post = new THREE.Mesh(postGeom, postMat);
+        post.position.set(p[0], 32, p[1]);
+        post.castShadow = true;
+        scene.add(post);
+      });
+      var ropeMat = new THREE.MeshBasicMaterial({ color: 0xff5d5d });
+      [18, 36, 54].forEach(function (ry) {
+        var ropeF = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 190, 6), ropeMat);
+        ropeF.rotation.z = Math.PI / 2;
+        ropeF.position.set(0, ry, -62);
+        scene.add(ropeF);
+        var ropeB = ropeF.clone(); ropeB.position.z = 62; scene.add(ropeB);
+        var ropeL = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 124, 6), ropeMat);
+        ropeL.rotation.x = Math.PI / 2;
+        ropeL.position.set(-95, ry, 0);
+        scene.add(ropeL);
+        var ropeR = ropeL.clone(); ropeR.position.x = 95; scene.add(ropeR);
+      });
+
+      // ---- fighters ----
+      function makeBoxer(bodyColor, skinColor, faceDir) {
+        var grp = new THREE.Group();
+        var legs = new THREE.Mesh(new THREE.CylinderGeometry(6, 7, 18, 8), new THREE.MeshStandardMaterial({ color: 0x24324a, roughness: 0.8 }));
+        legs.position.y = 9;
+        legs.castShadow = true;
+        grp.add(legs);
+        var torso = new THREE.Mesh(new THREE.BoxGeometry(17, 22, 11), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        torso.position.y = 29;
+        torso.castShadow = true;
+        grp.add(torso);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(6.6, 14, 10), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 }));
+        head.position.y = 44;
+        head.castShadow = true;
+        grp.add(head);
+
+        var armPivotNear = new THREE.Group();
+        armPivotNear.position.set(faceDir * 9, 32, 0);
+        grp.add(armPivotNear);
+        var armNear = new THREE.Mesh(new THREE.CylinderGeometry(3, 2.6, 12, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 }));
+        armNear.rotation.z = Math.PI / 2;
+        armNear.position.x = faceDir * 6;
+        armPivotNear.add(armNear);
+        var gloveNear = new THREE.Mesh(new THREE.SphereGeometry(6, 10, 8), new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 }));
+        gloveNear.position.x = faceDir * 13;
+        armPivotNear.add(gloveNear);
+
+        var armFar = new THREE.Mesh(new THREE.CylinderGeometry(3, 2.6, 11, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 }));
+        armFar.rotation.z = Math.PI / 2;
+        armFar.position.set(-faceDir * 4, 26, -3);
+        grp.add(armFar);
+        var gloveFar = new THREE.Mesh(new THREE.SphereGeometry(5.6, 10, 8), new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 }));
+        gloveFar.position.set(-faceDir * 9, 26, -3);
+        grp.add(gloveFar);
+
+        return { group: grp, armPivot: armPivotNear, gloveNear: gloveNear, faceDir: faceDir, baseX: faceDir * 9, crouch: 0 };
+      }
+
+      var playerFig = makeBoxer(new THREE.Color(R.orange), 0xE8B48C, 1);
+      var oppFig = makeBoxer(new THREE.Color(R.blue), 0xE8B48C, -1);
+      playerFig.group.position.set(PLAYER_X, 0, 0);
+      oppFig.group.position.set(OPP_X, 0, 0);
+      scene.add(playerFig.group);
+      scene.add(oppFig.group);
+
+      // ---- HUD overlays ----
+      var hpWrap = document.createElement('div');
+      hpWrap.style.cssText = 'position:absolute;top:4%;left:0;right:0;display:flex;justify-content:space-between;padding:0 6%;pointer-events:none';
+      var hpLeft = document.createElement('div');
+      hpLeft.style.cssText = 'width:38%;height:8px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden';
+      var hpLeftFill = document.createElement('div');
+      hpLeftFill.style.cssText = 'height:100%;background:' + R.green + ';width:100%;transition:width .15s';
+      hpLeft.appendChild(hpLeftFill);
+      var hpRight = document.createElement('div');
+      hpRight.style.cssText = 'width:38%;height:8px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden;display:flex;justify-content:flex-end';
+      var hpRightFill = document.createElement('div');
+      hpRightFill.style.cssText = 'height:100%;background:' + R.coral + ';width:100%;transition:width .15s';
+      hpRight.appendChild(hpRightFill);
+      hpWrap.appendChild(hpLeft); hpWrap.appendChild(hpRight);
+      canvasWrap.appendChild(hpWrap);
+
+      var cueLabel = document.createElement('div');
+      cueLabel.style.cssText = 'position:absolute;top:14%;left:50%;transform:translateX(-50%);font:800 20px "Baloo 2",sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.6);pointer-events:none;color:' + R.yellow;
+      canvasWrap.appendChild(cueLabel);
+
+      function stepParticles() {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.vy -= 0.12;
+          p.mesh.position.x += p.vx * 0.5; p.mesh.position.y += p.vy * 0.5; p.mesh.position.z += p.vz * 0.5;
+          p.life -= 0.035;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i, 1); }
+        }
+      }
+
+      renderOpts();
+      reset();
+
+      function renderFrame() {
+        // one shared physics-driven reach value, applied to whichever fighter(s)
+        // the original's single `punchAnim` counter says are mid-punch this frame
+        var reach = stepPunch();
+
+        // matches the original's drawFighter(...) punching flags exactly:
+        // the player only shows a punch in 1P mode; the opponent shows one
+        // whenever any hit just landed, in either mode.
+        var pPunching = punchAnim > 4 && mode === "1p";
+        var oPunching = punchAnim > 4;
+
+        var pDuck = pPunching && lastCueKey === "ArrowDown";
+        var pBodyShot = pPunching && lastCueKey === " ";
+        playerFig.armPivot.position.x = playerFig.baseX + (pDuck ? 0 : playerFig.faceDir * reach * (pPunching ? 0.9 : 0));
+        playerFig.armPivot.position.y = pBodyShot ? 24 : 32;
+        playerFig.group.position.set(PLAYER_X, pDuck ? -8 : 0, 0);
+
+        var oDuck = oPunching && lastCueKey === "ArrowDown";
+        var oBodyShot = oPunching && lastCueKey === " ";
+        oppFig.armPivot.position.x = oppFig.baseX + (oDuck ? 0 : oppFig.faceDir * reach * (oPunching ? 0.9 : 0));
+        oppFig.armPivot.position.y = oBodyShot ? 24 : 32;
+        oppFig.group.position.set(OPP_X, oDuck ? -8 : 0, 0);
+
+        if (waiting && cue) {
+          cueLabel.textContent = cue.label + "!";
+          cueLabel.style.color = R.yellow;
+        } else {
+          cueLabel.textContent = "Ready...";
+          cueLabel.style.color = "rgba(255,255,255,.45)";
+        }
+
+        if (mode === "1p") {
+          hpWrap.style.display = "flex";
+          hpLeftFill.style.width = Math.max(0, hp) + "%";
+          hpRightFill.style.width = Math.max(0, oppHp) + "%";
+        } else {
+          hpWrap.style.display = "none";
+        }
+
+        stepParticles();
+
+        var sx = 0, sz = 0;
+        if (shake > 0) { sx = (Math.random() - 0.5) * shake; sz = (Math.random() - 0.5) * shake * 0.4; }
+        camera.position.set(sx, 70, 190 + sz);
+        camera.lookAt(0, 35, 0);
+
+        renderer.render(scene, camera);
+      }
+
+      function stepLogic() {
+        if (punchAnim > 0) punchAnim--;
+        if (shake > 0) { shake *= 0.82; if (shake < 0.3) shake = 0; }
+      }
+
+      function loop(ts) {
+        if (!last) last = ts;
+        last = ts;
+        stepLogic();
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
       raf = requestAnimationFrame(loop);
-    });
 
-    return function () {
-      cancelAnimationFrame(raf);
-      clearTimeout(pendingTimer);
-      keyCleanup();
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+      return function () {
+        cancelAnimationFrame(raf);
+        clearTimeout(pendingTimer);
+        keyCleanup();
+        particles.forEach(function (p) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+        Matter.Composite.remove(punchEngine.world, punchBody);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
+    }
+
+    return csa3DLoadGate(el, t, startGame3D);
   }
-},g.golf = {
+},
+g.golf = {
   title: "Mini Golf",
   tagline: "Drag back, release to putt. Play three holes against par.",
   color: R.teal,
