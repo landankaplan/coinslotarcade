@@ -2310,267 +2310,445 @@ g.snake = {
   hint: "Click/Space to lock power, then lock aim · 10 shots",
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="4.2"/><path d="M4 21c1.5-4 4.2-6 8-6s6.5 2 8 6"/></svg>',
-  mount: function(el, t) {
-    var W = 360, H_ = 380;
-    var DIFFS = [
-      { name: "Easy",   hoopW: 76, speed: 2.4, powerWin: 0.16 },
-      { name: "Medium", hoopW: 58, speed: 3.4, powerWin: 0.11 },
-      { name: "Hard",   hoopW: 42, speed: 4.6, powerWin: 0.07 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var o = A(el, W, H_);
-    var ctx = o.ctx;
+  mount: function (el, t) {
+    function startGame3D(){
+      var W = 360, H_ = 380;
+      var DIFFS = [
+        { name: "Easy",   hoopW: 76, speed: 2.4, powerWin: 0.16 },
+        { name: "Medium", hoopW: 58, speed: 3.4, powerWin: 0.11 },
+        { name: "Hard",   hoopW: 42, speed: 4.6, powerWin: 0.07 }
+      ];
+      var diffIdx = 1, mode = "1p";
 
-    var shots, made, streak, bestStreak, points, level, phase, powerT, aimT, power, aim, flight, particles, shake, p1Made, p2Made, turn, raf, lastMsg;
+      var shots, made, streak, bestStreak, points, level, phase, powerT, aimT, power, aim, flight, shake, p1Made, p2Made, turn, raf, last, lastMsg, lastMsgT;
 
-    function newRound() { turn = 1; p1Made = 0; p2Made = 0; startGame(); }
+      var THROW_DIST = 480;
+      var Y0_WORLD = 60, Y1_WORLD = 86;
+      var HOOP_X = 180, HOOP_Y_ORIG = 72, START_Y_ORIG = 336;
+      var ARC_SCALE = 0.78;
+      var GRAV_SETTLE = 1.15;
 
-    function startGame() {
-      shots = 10; made = 0; streak = 0; bestStreak = 0; points = 0; level = 0;
-      particles = []; shake = 0; lastMsg = null;
-      setupShot();
-    }
+      Matter.Resolver._restingThresh = 0.001;
+      var engine = Matter.Engine.create();
+      engine.gravity.x = 0; engine.gravity.y = 1;
+      var ballBody = Matter.Bodies.circle(0, 0, 6, { frictionAir: 0, friction: 0, restitution: 0 });
+      Matter.Composite.add(engine.world, ballBody);
 
-    function setupShot() {
-      phase = "power"; powerT = Math.random() * 6.28; aimT = 0;
-      power = 0; aim = 0.5; flight = null;
-      updateHud();
-    }
-
-    function hoopWidth() { return Math.max(26, DIFFS[diffIdx].hoopW - level * 5); }
-
-    function updateHud() {
-      var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
-      t.setHud(
-        "MADE<b>" + made + "</b>" +
-        '<span style="margin-left:1rem">LEFT<b>' + shots + "</b></span>" +
-        '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" +
-        '<span style="margin-left:1rem">PTS<b>' + points + "</b></span>" + turnTag
-      );
-    }
-
-    function burst(x, y, color, n, spread) {
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2;
-        var sp = (0.6 + Math.random() * 1) * (spread || 3);
-        particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5, life: 1, color: color, r: 2 + Math.random() * 2 });
-      }
-    }
-
-    function lockPower() {
-      if (flight) return;
-      if (phase === "power") { phase = "aim"; return; }
-      if (phase === "aim") { launch(); }
-    }
-
-    function launch() {
-      var d = DIFFS[diffIdx];
-      var hoopX = 180, hoopY = 72;
-      var startX = 180 + (level > 0 ? (made % 2 === 0 ? -34 : 34) * level : 0);
-      var startY = 336;
-
-      // power quality: how close to the "sweet" window centred at 0.82
-      var idealPower = 0.82;
-      var powerQ = 1 - Math.min(1, Math.abs(power - idealPower) / d.powerWin);
-      // aim quality: how close the horizontal landing is to hoop centre
-      var maxOffset = 62;
-      var landingX = hoopX + (aim - 0.5) * 2 * maxOffset;
-      var aimQ = 1 - Math.min(1, Math.abs(landingX - hoopX) / (hoopWidth() / 2));
-
-      var quality = Math.min(powerQ, aimQ) * 0.6 + (powerQ + aimQ) / 2 * 0.4;
-      quality = Math.max(0, Math.min(1, quality));
-
-      var outcome;
-      if (quality > 0.82) outcome = "swish";
-      else if (quality > 0.5) outcome = "rim-in";
-      else if (quality > 0.28) outcome = "rim-out";
-      else outcome = "brick";
-
-      var arcH = 46 + power * 170;
-      flight = {
-        t: 0, dur: Math.round(40 - d.speed), x0: startX, y0: startY,
-        x1: landingX, y1: hoopY, h: arcH, outcome: outcome, quality: quality,
-        bounceT: 0, resolved: false
-      };
-      phase = "anim";
-    }
-
-    function resolveShot() {
-      var f = flight;
-      var isMake = f.outcome === "swish" || f.outcome === "rim-in";
-      shots--;
-      if (isMake) {
-        made++; streak++; bestStreak = Math.max(bestStreak, streak);
-        var qualityBonus = Math.round(f.quality * 6);
-        var streakBonus = Math.min(streak - 1, 5) * 2;
-        points += 10 + qualityBonus + streakBonus;
-        lastMsg = { text: f.outcome === "swish" ? "SWISH!" : "IT'S GOOD!", color: R.green };
-        burst(180, 72, f.outcome === "swish" ? R.yellow : R.teal, f.outcome === "swish" ? 26 : 16, 4);
-        if (streak > 0 && streak % 3 === 0 && level < 2) level++;
-      } else {
-        streak = 0;
-        lastMsg = { text: f.outcome === "rim-out" ? "SO CLOSE" : "BRICK", color: R.coral };
-        burst(f.x1, f.y1 + 4, R.coral, 8, 2.2);
-        shake = f.outcome === "brick" ? 8 : 4;
-      }
-      updateHud();
-      if (shots <= 0) { endTurn(); } else { setTimeout(function () { if (flight === f) { setupShot(); } }, 260); }
-    }
-
-    function endTurn() {
-      if (mode === "1p") {
-        t.reportScore("hoop", points);
-        t.showOverlay("Round over", "Made " + made + " of 10 · " + points + " pts · best streak " + bestStreak, "Play again", startGame);
-      } else if (turn === 1) {
-        p1Made = made; turn = 2;
-        t.showOverlay("Player 1 done!", "P1 made " + p1Made + "/10 (" + points + " pts) — pass the device to Player 2", "Start P2", function () { startGame(); });
-      } else {
-        p2Made = made;
-        var win = p1Made === p2Made ? "Draw!" : (p1Made > p2Made ? "Player 1 wins!" : "Player 2 wins!");
-        t.reportScore("hoop", 100 * Math.max(p1Made, p2Made));
-        t.showOverlay(win, "P1: " + p1Made + "/10 · P2: " + p2Made + "/10", "Play again", newRound);
-      }
-    }
-
-    o.canvas.addEventListener("pointerdown", lockPower);
-    var keyCleanup = H(function (e) { if (e.key === " ") { e.preventDefault(); lockPower(); } });
-
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">DIFFICULTY</span>' +
-        DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (b) {
-        b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newRound(); });
-      });
-      bar.querySelectorAll("[data-mode]").forEach(function (b) {
-        b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newRound(); });
-      });
-    }
-    renderOpts();
-    newRound();
-
-    function drawNet(x, y, wobble) {
-      ctx.strokeStyle = "rgba(255,255,255,.5)";
-      ctx.lineWidth = 1.4;
-      for (var i = -3; i <= 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x + i * 6, y);
-        ctx.lineTo(x + i * 4 + wobble, y + 30);
-        ctx.stroke();
-      }
-    }
-
-    function draw() {
-      var sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      var sy = shake > 0 ? (Math.random() - 0.5) * shake : 0;
-      ctx.save();
-      ctx.translate(sx, sy);
-      ctx.fillStyle = R.bg;
-      ctx.fillRect(-10, -10, W + 20, H_ + 20);
-
-      // backboard + rim
-      ctx.fillStyle = R.dim;
-      ctx.fillRect(180 - 42, 48, 84, 5);
-      var hw = hoopWidth();
-      var rimWobble = flight && flight.t > flight.dur ? Math.sin(flight.bounceT * 1.4) * 3 : 0;
-      ctx.strokeStyle = R.orange;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.ellipse(180 + rimWobble, 72, hw / 2, 7, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      drawNet(180 + rimWobble, 76, rimWobble);
-
-      // court / shooter mark
-      ctx.fillStyle = R.ink;
-      L(ctx, 166, 344, 28, 26, 8); ctx.fill();
-
-      // power / aim bars
-      if (phase === "power" || phase === "aim") {
-        var bx = 30, by = 300, bw = 300, bh = 14;
-        ctx.fillStyle = R.grid;
-        L(ctx, bx, by, bw, bh, 7); ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,.15)";
-        L(ctx, bx + 0.72 * bw, by, 0.25 * bw, bh, 4); ctx.fill();
-        var val = phase === "power" ? power : aim;
-        ctx.fillStyle = phase === "power" ? R.yellow : R.teal;
-        ctx.fillRect(bx + val * bw - 2, by - 4, 4, bh + 8);
-        ctx.fillStyle = R.ink;
-        ctx.font = "700 12px Baloo 2, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(phase === "power" ? "Click to set POWER" : "Click to set AIM", 180, by - 14);
+      function currentStartX() {
+        return HOOP_X + (level > 0 ? (made % 2 === 0 ? -34 : 34) * level : 0);
       }
 
-      // ball flight
-      if (flight) {
+      function newRound() { turn = 1; p1Made = 0; p2Made = 0; startGame(); }
+
+      function startGame() {
+        shots = 10; made = 0; streak = 0; bestStreak = 0; points = 0; level = 0;
+        shake = 0; lastMsg = null; lastMsgT = 0;
+        setupShot();
+      }
+
+      function setupShot() {
+        phase = "power"; powerT = Math.random() * 6.28; aimT = 0;
+        power = 0; aim = 0.5; flight = null;
+        updateHud();
+        updateRim();
+      }
+
+      function hoopWidth() { return Math.max(26, DIFFS[diffIdx].hoopW - level * 5); }
+
+      function updateHud() {
+        var turnTag = mode === "1p" ? "" : '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + " turn</span>";
+        t.setHud(
+          "MADE<b>" + made + "</b>" +
+          '<span style="margin-left:1rem">LEFT<b>' + shots + "</b></span>" +
+          '<span style="margin-left:1rem">STREAK<b>' + streak + "</b></span>" +
+          '<span style="margin-left:1rem">PTS<b>' + points + "</b></span>" + turnTag +
+          (level > 0 ? '<span style="margin-left:1rem">LV<b>' + (level + 1) + "</b></span>" : "")
+        );
+      }
+
+      function lockPower() {
+        if (flight) return;
+        if (phase === "power") { phase = "aim"; return; }
+        if (phase === "aim") { launch(); }
+      }
+
+      function launch() {
+        var d = DIFFS[diffIdx];
+        var hoopX = HOOP_X, hoopY = HOOP_Y_ORIG;
+        var startX = currentStartX();
+        var startY = START_Y_ORIG;
+
+        var idealPower = 0.82;
+        var powerQ = 1 - Math.min(1, Math.abs(power - idealPower) / d.powerWin);
+        var maxOffset = 62;
+        var landingX = hoopX + (aim - 0.5) * 2 * maxOffset;
+        var aimQ = 1 - Math.min(1, Math.abs(landingX - hoopX) / (hoopWidth() / 2));
+
+        var quality = Math.min(powerQ, aimQ) * 0.6 + (powerQ + aimQ) / 2 * 0.4;
+        quality = Math.max(0, Math.min(1, quality));
+
+        var outcome;
+        if (quality > 0.82) outcome = "swish";
+        else if (quality > 0.5) outcome = "rim-in";
+        else if (quality > 0.28) outcome = "rim-out";
+        else outcome = "brick";
+
+        var arcH = 46 + power * 170;
+        var dur = Math.round(40 - d.speed);
+        var arcWorld = arcH * ARC_SCALE;
+        var g = 8 * arcWorld / (dur * dur);
+        var vy0 = 4 * arcWorld / dur;
+
+        Matter.Body.setPosition(ballBody, { x: 0, y: 0 });
+        Matter.Body.setVelocity(ballBody, { x: THROW_DIST / dur, y: -vy0 });
+        engine.gravity.y = g;
+
+        flight = {
+          sub: "fly", dur: dur, startX: startX, landX: landingX, outcome: outcome, quality: quality,
+          settleX: 0, settleY: 0, settleZ: 0, vxs: 0, vys: 0, frames: 0
+        };
+        phase = "anim";
+      }
+
+      function startSettle() {
         var f = flight;
-        if (f.t <= f.dur) {
-          var tt = f.t / f.dur;
-          var bxp = f.x0 + (f.x1 - f.x0) * tt;
-          var byp = f.y0 + (f.y1 - f.y0) * tt - f.h * 4 * tt * (1 - tt);
-          ctx.fillStyle = R.coral;
-          ctx.beginPath(); ctx.arc(bxp, byp, 8, 0, Math.PI * 2); ctx.fill();
-          if (streak >= 3) burst(bxp, byp, R.yellow, 1, 0.6);
-        } else if (!f.resolved) {
-          // brief bounce/settle animation after arc completes
-          f.bounceT++;
-          var settleX = f.outcome === "rim-out" ? f.x1 + 26 : f.x1;
-          var settleY = f.outcome === "swish" || f.outcome === "rim-in" ? f.y1 + 24 + f.bounceT * 2 : f.y1 - 6 + Math.abs(Math.sin(f.bounceT * 0.5)) * -10;
-          ctx.fillStyle = R.coral;
-          ctx.beginPath(); ctx.arc(settleX, settleY, 8, 0, Math.PI * 2); ctx.fill();
-          if (f.bounceT > 12) { f.resolved = true; resolveShot(); }
+        f.sub = "settle"; f.frames = 0;
+        var isMake = f.outcome === "swish" || f.outcome === "rim-in";
+        f.settleX = 0; f.settleY = 0;
+        if (isMake) {
+          f.vxs = 0; f.vys = 0;
+        } else if (f.outcome === "rim-out") {
+          f.vxs = (f.landX >= HOOP_X ? 1 : -1) * 2.6;
+          f.vys = -2.3;
+        } else {
+          f.vxs = (Math.random() - 0.5) * 1.6;
+          f.vys = -1.5;
         }
       }
 
-      // particles
-      particles.forEach(function (p) {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.14; p.life -= 0.028;
-      });
-      particles = particles.filter(function (p) { return p.life > 0; });
-      particles.forEach(function (p) {
-        ctx.globalAlpha = Math.max(0, p.life);
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
-      });
-      ctx.globalAlpha = 1;
+      function stepSettle() {
+        var f = flight;
+        if (f.resolved) return;
+        f.frames++;
+        var isMake = f.outcome === "swish" || f.outcome === "rim-in";
+        if (isMake) {
+          f.vys += GRAV_SETTLE * 0.5;
+          f.settleY -= f.vys;
+          if (f.settleY < -46) { f.resolved = true; resolveShot(); }
+        } else {
+          f.vys += GRAV_SETTLE;
+          f.settleY += -f.vys;
+          f.settleX += f.vxs;
+          if (f.settleY <= 0) {
+            f.settleY = 0;
+            f.vys *= -0.4;
+            f.vxs *= 0.7;
+          }
+          if (f.frames > 26 || (f.frames > 10 && Math.abs(f.vys) < 0.4 && f.settleY <= 0.5)) { f.resolved = true; resolveShot(); }
+        }
+      }
 
-      if (lastMsg && flight && flight.resolved !== true && flight.t <= flight.dur + 14) {
-        ctx.fillStyle = lastMsg.color;
-        ctx.font = "700 16px Baloo 2, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(lastMsg.text, 180, 108);
+      function resolveShot() {
+        var f = flight;
+        var isMake = f.outcome === "swish" || f.outcome === "rim-in";
+        shots--;
+        if (isMake) {
+          made++; streak++; bestStreak = Math.max(bestStreak, streak);
+          var qualityBonus = Math.round(f.quality * 6);
+          var streakBonus = Math.min(streak - 1, 5) * 2;
+          points += 10 + qualityBonus + streakBonus;
+          lastMsg = { text: f.outcome === "swish" ? "SWISH!" : "IT'S GOOD!", color: "#6EE7B7" };
+          burst(f.outcome === "swish" ? "#FFD23F" : "#2DD4BF", f.outcome === "swish" ? 26 : 16);
+          if (streak > 0 && streak % 3 === 0 && level < 2) level++;
+        } else {
+          streak = 0;
+          lastMsg = { text: f.outcome === "rim-out" ? "SO CLOSE" : "BRICK", color: "#FF6B6B" };
+          burst("#FF6B6B", 8);
+          shake = f.outcome === "brick" ? 8 : 4;
+        }
+        lastMsgT = 50;
+        updateHud();
+        updateRim();
+        if (shots <= 0) { flight = null; endTurn(); } else { setTimeout(function () { setupShot(); }, 400); }
       }
-      if (level > 0) {
-        ctx.fillStyle = R.dim;
-        ctx.font = "700 10px Baloo 2, sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("LV " + (level + 1), 12, 20);
+
+      function endTurn() {
+        if (mode === "1p") {
+          t.reportScore("hoop", points);
+          t.showOverlay("Round over", "Made " + made + " of 10 · " + points + " pts · best streak " + bestStreak, "Play again", startGame);
+        } else if (turn === 1) {
+          p1Made = made; turn = 2;
+          t.showOverlay("Player 1 done!", "P1 made " + p1Made + "/10 (" + points + " pts) — pass the device to Player 2", "Start P2", function () { startGame(); });
+        } else {
+          p2Made = made;
+          var win = p1Made === p2Made ? "Draw!" : (p1Made > p2Made ? "Player 1 wins!" : "Player 2 wins!");
+          t.reportScore("hoop", 100 * Math.max(p1Made, p2Made));
+          t.showOverlay(win, "P1: " + p1Made + "/10 · P2: " + p2Made + "/10", "Play again", newRound);
+        }
       }
-      ctx.restore();
+
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
+
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">DIFFICULTY</span>' +
+          DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (b) {
+          b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newRound(); });
+        });
+        bar.querySelectorAll("[data-mode]").forEach(function (b) {
+          b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newRound(); });
+        });
+      }
+      renderOpts();
+
+      // ---------------- 3D rendering ----------------
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:360px;aspect-ratio:360/380;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var VIEW_W = 360, VIEW_H = 380;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x0c1620, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0c1620, 420, 1100);
+
+      var camera = new THREE.PerspectiveCamera(62, VIEW_W/VIEW_H, 1, 2000);
+      camera.position.set(0, 100, 240);
+      camera.lookAt(0, 78, -220);
+
+      scene.add(new THREE.AmbientLight(0xffe3c2, 0.6));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.05);
+      sun.position.set(80, 240, 120);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024,1024);
+      scene.add(sun);
+
+      var Z_SHOOTER = 175, Z_HOOP = -350;
+      function mapX(x){ return x - HOOP_X; }
+
+      var floor = new THREE.Mesh(new THREE.PlaneGeometry(W, 640), new THREE.MeshStandardMaterial({ color: 0x1c2f38, roughness: 0.92 }));
+      floor.rotation.x = -Math.PI/2;
+      floor.position.set(0, 0, (Z_SHOOTER+Z_HOOP)/2 - 60);
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      var keyLine = new THREE.Mesh(new THREE.RingGeometry(70, 74, 32, 1, 0, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.18, side: THREE.DoubleSide }));
+      keyLine.rotation.x = -Math.PI/2;
+      keyLine.position.set(0, 0.2, Z_HOOP + 90);
+      scene.add(keyLine);
+
+      var backboard = new THREE.Mesh(new THREE.BoxGeometry(90, 56, 4), new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.5, transparent:true, opacity:0.92 }));
+      backboard.position.set(0, Y1_WORLD + 22, Z_HOOP - 10);
+      backboard.castShadow = true;
+      scene.add(backboard);
+      var boardSquare = new THREE.Mesh(new THREE.RingGeometry(14, 15.5, 4, 1), new THREE.MeshBasicMaterial({ color: 0xFF7A45 }));
+      boardSquare.position.set(0, Y1_WORLD + 10, Z_HOOP - 7.8);
+      boardSquare.rotation.z = Math.PI/4;
+      scene.add(boardSquare);
+
+      var BASE_HOOP_W = DIFFS[diffIdx].hoopW;
+      var rimMesh = new THREE.Mesh(new THREE.TorusGeometry(BASE_HOOP_W/2, 2.2, 10, 24), new THREE.MeshStandardMaterial({ color: 0xFF7A45, roughness:0.4, metalness:0.3 }));
+      rimMesh.rotation.x = Math.PI/2;
+      rimMesh.position.set(0, Y1_WORLD, Z_HOOP + 6);
+      rimMesh.castShadow = true;
+      scene.add(rimMesh);
+
+      var netGroup = new THREE.Group();
+      var netMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent:true, opacity:0.55 });
+      for (var ni = -3; ni <= 3; ni++) {
+        var pts = [
+          new THREE.Vector3(ni*6, Y1_WORLD - 1, Z_HOOP + 6),
+          new THREE.Vector3(ni*3.2, Y1_WORLD - 24, Z_HOOP + 6)
+        ];
+        var lg = new THREE.BufferGeometry().setFromPoints(pts);
+        netGroup.add(new THREE.Line(lg, netMat));
+      }
+      scene.add(netGroup);
+
+      function updateRim() {
+        var ratio = hoopWidth() / BASE_HOOP_W;
+        rimMesh.scale.set(ratio, 1, ratio);
+        netGroup.scale.set(ratio, 1, 1);
+        netGroup.position.set(0,0,0);
+      }
+
+      // basketball texture
+      function makeBallTexture() {
+        var c = document.createElement('canvas'); c.width = 256; c.height = 256;
+        var cx = c.getContext('2d');
+        cx.fillStyle = '#E8763A'; cx.fillRect(0,0,256,256);
+        cx.strokeStyle = '#2b1a10'; cx.lineWidth = 5;
+        cx.beginPath(); cx.moveTo(128,0); cx.lineTo(128,256); cx.stroke();
+        cx.beginPath(); cx.moveTo(0,128); cx.lineTo(256,128); cx.stroke();
+        cx.beginPath(); cx.arc(0,128,110,-0.7,0.7); cx.stroke();
+        cx.beginPath(); cx.arc(256,128,110,Math.PI-0.7,Math.PI+0.7); cx.stroke();
+        return new THREE.CanvasTexture(c);
+      }
+      var ballTex = makeBallTexture();
+      var ballMesh = new THREE.Mesh(new THREE.SphereGeometry(7.5, 20, 16), new THREE.MeshStandardMaterial({ map: ballTex, roughness: 0.75 }));
+      ballMesh.castShadow = true;
+      scene.add(ballMesh);
+
+      var shooterMark = new THREE.Mesh(new THREE.RingGeometry(10, 13, 20), new THREE.MeshBasicMaterial({ color: 0xFF7A45, transparent:true, opacity:0.5, side: THREE.DoubleSide }));
+      shooterMark.rotation.x = -Math.PI/2;
+      scene.add(shooterMark);
+
+      var particles = [];
+      function burst(colorHex, n) {
+        var color = new THREE.Color(colorHex);
+        for (var i = 0; i < n; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: color, transparent:true, opacity:1 });
+          var m = new THREE.Mesh(new THREE.SphereGeometry(1.6, 6, 6), mat);
+          m.position.set(0, Y1_WORLD, Z_HOOP + 6);
+          var a = Math.random()*Math.PI*2, sp = 1 + Math.random()*2.4;
+          scene.add(m);
+          particles.push({ mesh: m, vx: Math.cos(a)*sp, vy: Math.random()*2.2, vz: Math.sin(a)*sp, life: 1 });
+        }
+      }
+      function stepParticles() {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.vy -= 0.12;
+          p.mesh.position.x += p.vx*0.5; p.mesh.position.y += p.vy*0.5; p.mesh.position.z += p.vz*0.5;
+          p.life -= 0.03;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0) { scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i,1); }
+        }
+      }
+
+      // power/aim DOM meter
+      var meterWrap = document.createElement('div');
+      meterWrap.style.cssText = 'width:100%;max-width:320px;margin:0 auto;text-align:center;display:none';
+      var meterLabel = document.createElement('div');
+      meterLabel.style.cssText = 'font:700 12px "Baloo 2",sans-serif;color:var(--ink,#1b1033);margin-bottom:4px';
+      var meterTrack = document.createElement('div');
+      meterTrack.style.cssText = 'position:relative;height:16px;border-radius:8px;background:rgba(120,120,160,.25);overflow:hidden';
+      var meterBand = document.createElement('div');
+      meterBand.style.cssText = 'position:absolute;left:72%;width:25%;top:0;bottom:0;background:rgba(255,255,255,.18);border-radius:4px';
+      var meterMark = document.createElement('div');
+      meterMark.style.cssText = 'position:absolute;top:-4px;bottom:-4px;width:4px;border-radius:2px;background:#FFD23F';
+      meterTrack.appendChild(meterBand); meterTrack.appendChild(meterMark);
+      meterWrap.appendChild(meterLabel); meterWrap.appendChild(meterTrack);
+      canvasWrap.appendChild(meterWrap);
+      meterWrap.style.position = 'absolute'; meterWrap.style.left='50%'; meterWrap.style.bottom='3%'; meterWrap.style.transform='translateX(-50%)';
+
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:absolute;top:20%;left:50%;transform:translateX(-50%);font:700 20px "Baloo 2",sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.5);pointer-events:none;opacity:0;transition:opacity .15s';
+      canvasWrap.appendChild(toast);
+
+      function renderFrame() {
+        var startXCur = currentStartX();
+        shooterMark.position.set(mapX(startXCur), 0.2, Z_SHOOTER);
+
+        if (phase === "power" || phase === "aim") {
+          meterWrap.style.display = "";
+          var val = phase === "power" ? power : aim;
+          meterLabel.textContent = phase === "power" ? "Click to set POWER" : "Click to set AIM";
+          meterMark.style.left = (val*100) + "%";
+          meterMark.style.background = phase === "power" ? "#FFD23F" : "#2DD4BF";
+          ballMesh.visible = true;
+          ballMesh.position.set(mapX(startXCur), Y0_WORLD, Z_SHOOTER);
+        } else {
+          meterWrap.style.display = "none";
+        }
+
+        if (flight) {
+          ballMesh.visible = true;
+          if (flight.sub === "fly") {
+            var depthT = Math.max(0, Math.min(1, ballBody.position.x / THROW_DIST));
+            var wx = flight.startX + (flight.landX - flight.startX) * depthT;
+            var wz = Z_SHOOTER + (Z_HOOP - Z_SHOOTER) * depthT;
+            var baseY = Y0_WORLD + (Y1_WORLD - Y0_WORLD) * depthT;
+            var bulge = Math.max(0, -ballBody.position.y);
+            ballMesh.position.set(mapX(wx), baseY + bulge, wz);
+            ballMesh.rotation.x += 0.12;
+          } else if (flight.sub === "settle") {
+            ballMesh.position.set(mapX(flight.landX) + flight.settleX, Y1_WORLD + flight.settleY, Z_HOOP + 6);
+          }
+        } else if (phase === "anim") {
+          ballMesh.visible = false;
+        }
+
+        if (lastMsgT > 0 && lastMsg) {
+          lastMsgT--;
+          toast.textContent = lastMsg.text;
+          toast.style.color = lastMsg.color;
+          toast.style.opacity = Math.min(1, lastMsgT/10);
+        } else {
+          toast.style.opacity = 0;
+        }
+
+        stepParticles();
+
+        var sx = 0, sy = 0;
+        if (shake > 0) { sx = (Math.random()-0.5)*shake*0.6; sy = (Math.random()-0.5)*shake*0.6; shake *= 0.82; if (shake < 0.3) shake = 0; }
+        camera.position.set(sx, 100+sy, 240);
+        camera.lookAt(0, 78, -220);
+
+        renderer.render(scene, camera);
+      }
+
+      function step(dt) {
+        var d = DIFFS[diffIdx];
+        if (phase === "power") { powerT += 0.03 * d.speed; power = (Math.sin(powerT) + 1) / 2; }
+        else if (phase === "aim") { aimT += 0.036 * d.speed; aim = (Math.sin(aimT) + 1) / 2; }
+        else if (phase === "anim" && flight) {
+          if (flight.sub === "fly") {
+            Matter.Engine.update(engine, Math.min(dt, 33));
+            if (ballBody.position.x >= THROW_DIST) { startSettle(); }
+          } else if (flight.sub === "settle") {
+            stepSettle();
+          }
+        }
+      }
+
+      function loop(ts) {
+        if (!last) last = ts;
+        var dt = ts - last; last = ts;
+        step(dt);
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
+
+      renderer.domElement.addEventListener("pointerdown", lockPower);
+      var keyCleanup = H(function (e) { if (e.key === " ") { e.preventDefault(); lockPower(); } });
+
+      updateRim();
+      newRound();
+      raf = requestAnimationFrame(loop);
+
+      return function () {
+        cancelAnimationFrame(raf);
+        renderer.domElement.removeEventListener("pointerdown", lockPower);
+        keyCleanup();
+        particles.forEach(function(p){ scene.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); });
+        Matter.Composite.remove(engine.world, ballBody);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    raf = requestAnimationFrame(function loop() {
-      var d = DIFFS[diffIdx];
-      if (phase === "power") { powerT += 0.03 * d.speed; power = (Math.sin(powerT) + 1) / 2; }
-      else if (phase === "aim") { aimT += 0.036 * d.speed; aim = (Math.sin(aimT) + 1) / 2; }
-      else if (phase === "anim" && flight) { flight.t++; }
-      if (shake > 0) shake *= 0.82; if (shake < 0.3) shake = 0;
-      draw();
-      raf = requestAnimationFrame(loop);
-    });
-
-    return function () {
-      cancelAnimationFrame(raf);
-      o.canvas.removeEventListener("pointerdown", lockPower);
-      keyCleanup();
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+    return csa3DLoadGate(el, t, startGame3D);
   }
-},g.penalty = {
+},
+
+g.penalty = {
   title: "Penalty Kick",
   tagline: "Aim past the keeper. Best of five, alternating shots.",
   color: R.green,
