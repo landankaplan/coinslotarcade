@@ -5437,6 +5437,13 @@ g.bowling = {
       ];
       var laneIdx = 1, mode = "1p";
 
+      var POVS = [
+        { name: "Overhead", pos: [0, 360, 260], look: [0, 0, -60], fov: 58 },
+        { name: "Behind the Ball", pos: [0, 140, 420], look: [0, 20, -100], fov: 58 },
+        { name: "Pin Cam", pos: [0, 95, -230], look: [0, 20, 180], fov: 54 }
+      ];
+      var povIdx = 0;
+
       var frameIdx, rollInFrame, rolls, totalPins, strikeCount, spareCount, points, pins, ballBody, rolling, drag, wobbleSeed, label, turn, p1Total, p2Total, snapshotUp, gameOver, raf, last;
 
       Matter.Resolver._restingThresh = 0.001;
@@ -5615,9 +5622,13 @@ g.bowling = {
           '<span class="opt-group"><span class="opt-label">LANE</span>' +
           LANES.map(function (ln, i) { return '<button type="button" class="opt-btn' + (i === laneIdx ? " active" : "") + '" data-diff="' + i + '">' + ln.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { laneIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -5639,8 +5650,14 @@ g.bowling = {
       scene.fog = new THREE.Fog(0x120c28, 500, 1400);
 
       var camera = new THREE.PerspectiveCamera(58, VIEW_W/VIEW_H, 1, 2000);
-      camera.position.set(0, 360, 260);
-      camera.lookAt(0, 0, -60);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0x8080ff, 0.55));
       var sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -5726,6 +5743,10 @@ g.bowling = {
             p.mesh.visible = false;
           }
         });
+
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0], pv.pos[1], pv.pos[2]);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
