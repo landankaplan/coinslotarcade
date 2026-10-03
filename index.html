@@ -3550,12 +3550,12 @@ g.tennis = {
   title: "Tennis Rally",
   tagline: "Chase the bounce, clear the net, cover the baseline — first to eleven.",
   color: R.magenta,
-  hint: "Drag / ← → to cover your baseline · hit off-centre for a risky, faster shot",
+  hint: "Drag / ↑ ↓ to cover your baseline · hit off-centre for a risky, faster shot",
   category: "Sports",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M4.5 7.5c3 3 3 8 0 11M19.5 7.5c-3 3-3 8 0 11"/></svg>',
   mount: function(el, t) {
     function startGame3D(){
-      var W = 440, H_ = 300, PADDLE_W = 54, NET_Y = 150;
+      var W = 440, H_ = 300, PADDLE_W = 54;
       var DIFFS = [
         { name: "Easy", speed: 2.5, error: 66, reaction: 0.10 },
         { name: "Medium", speed: 3.5, error: 34, reaction: 0.16 },
@@ -3563,7 +3563,11 @@ g.tennis = {
       ];
       var diffIdx = 1, mode = "1p";
 
-      var COURT_HALF_W = 120, Z_NEAR = 260, Z_FAR = -260, NET_HEIGHT = 11;
+      // Court laid out HORIZONTALLY: baseline-to-baseline ("ball.z") runs
+      // left-right on screen (world X); sideline coverage ("ball.x") runs
+      // toward/away from the camera (world Z), which the elevated camera
+      // reads as up/down motion on screen.
+      var WID = 120, LEN = 260, NET_HEIGHT = 11;
 
       var near, far, ball, playerScore, cpuScore, rallyLen, points, running, particles, shake, keys, raf, last;
 
@@ -3592,8 +3596,8 @@ g.tennis = {
         return Math.max(0, -flightBody.position.y);
       }
 
-      function mapX(x) { return (x - 220) * (COURT_HALF_W / 193); }
-      function mapZ(z) { return (z - 0.5) * 520; }
+      function mapLen(z) { return -LEN + z * (LEN * 2); }
+      function mapWide(x) { return (x - 220) * (WID / 193); }
 
       function reset() {
         near = { x: 220 }; far = { x: 220 };
@@ -3637,7 +3641,7 @@ g.tennis = {
         if (playerWins) { playerScore++; points += 10 + rallyLen * 2; }
         else { cpuScore++; }
         shake = reason === "net" ? 3 : 5;
-        burst(mapX(ball.x), 10, mapZ(ball.z), playerWins ? R.green : R.coral, 14);
+        burst(mapLen(ball.z), 10, mapWide(ball.x), playerWins ? R.green : R.coral, 14);
         updateHud();
         if (playerScore >= 11 || cpuScore >= 11) {
           var won = playerScore >= 11;
@@ -3653,15 +3657,15 @@ g.tennis = {
         }
       }
 
-      function setNearX(clientX) {
+      function setNearPos(clientY) {
         var rect = renderer.domElement.getBoundingClientRect();
-        near.x = Math.max(27, Math.min(413, (clientX - rect.left) * (W / rect.width)));
+        near.x = Math.max(27, Math.min(413, (clientY - rect.top) * (W / rect.height)));
       }
-      function onPointerMove(e) { setNearX(e.clientX); }
-      function onTouchMove(e) { if (e.touches[0]) { setNearX(e.touches[0].clientX); e.preventDefault(); } }
+      function onPointerMove(e) { setNearPos(e.clientY); }
+      function onTouchMove(e) { if (e.touches[0]) { setNearPos(e.touches[0].clientY); e.preventDefault(); } }
       function onKeyUp(e) {
-        if (e.key === "a" || e.key === "A") keys.left = false;
-        else if (e.key === "d" || e.key === "D") keys.right = false;
+        if (e.key === "w" || e.key === "W") keys.left = false;
+        else if (e.key === "s" || e.key === "S") keys.right = false;
       }
 
       var stackWrap = document.createElement('div');
@@ -3700,8 +3704,8 @@ g.tennis = {
       scene.fog = new THREE.Fog(0x0c1a2e, 520, 1450);
 
       var camera = new THREE.PerspectiveCamera(62, VIEW_W / VIEW_H, 1, 2000);
-      camera.position.set(0, 260, 560);
-      camera.lookAt(0, 30, -180);
+      camera.position.set(0, 220, 430);
+      camera.lookAt(0, 20, 0);
 
       scene.add(new THREE.AmbientLight(0xcfe0ff, 0.65));
       var sun = new THREE.DirectionalLight(0xffffff, 1.05);
@@ -3711,13 +3715,13 @@ g.tennis = {
       scene.add(sun);
 
       // court surface (hard court blue, green surround)
-      var surround = new THREE.Mesh(new THREE.PlaneGeometry(600, 760), new THREE.MeshStandardMaterial({ color: 0x1c5c3d, roughness: 0.95 }));
+      var surround = new THREE.Mesh(new THREE.PlaneGeometry(760, 600), new THREE.MeshStandardMaterial({ color: 0x1c5c3d, roughness: 0.95 }));
       surround.rotation.x = -Math.PI / 2;
       surround.position.set(0, -0.1, 0);
       surround.receiveShadow = true;
       scene.add(surround);
 
-      var court = new THREE.Mesh(new THREE.PlaneGeometry(COURT_HALF_W * 2 + 40, 600), new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: 0.9 }));
+      var court = new THREE.Mesh(new THREE.PlaneGeometry(600, WID * 2 + 40), new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: 0.9 }));
       court.rotation.x = -Math.PI / 2;
       court.position.set(0, 0, 0);
       court.receiveShadow = true;
@@ -3731,29 +3735,30 @@ g.tennis = {
         return m;
       }
       // baselines, sidelines, service lines, centre line, net line
-      lineMesh(COURT_HALF_W * 2 + 20, 2.4, 0, Z_NEAR);
-      lineMesh(COURT_HALF_W * 2 + 20, 2.4, 0, Z_FAR);
-      lineMesh(2.4, Z_NEAR - Z_FAR, -COURT_HALF_W - 9, 0);
-      lineMesh(2.4, Z_NEAR - Z_FAR, COURT_HALF_W + 9, 0);
-      lineMesh(COURT_HALF_W * 2 - 10, 2.2, 0, 130);
-      lineMesh(COURT_HALF_W * 2 - 10, 2.2, 0, -130);
-      lineMesh(2.2, 260, 0, 0);
-      lineMesh(2.2, 4, 0, 0);
+      lineMesh(2.4, WID * 2 + 20, LEN, 0);
+      lineMesh(2.4, WID * 2 + 20, -LEN, 0);
+      lineMesh(LEN * 2, 2.4, 0, -WID - 9);
+      lineMesh(LEN * 2, 2.4, 0, WID + 9);
+      lineMesh(2.2, WID * 2 - 10, 130, 0);
+      lineMesh(2.2, WID * 2 - 10, -130, 0);
+      lineMesh(260, 2.2, 0, 0);
+      lineMesh(4, 2.2, 0, 0);
 
       // net
       var netPostMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
       var postL = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, NET_HEIGHT + 4, 10), netPostMat);
-      postL.position.set(-COURT_HALF_W - 10, (NET_HEIGHT + 4) / 2, 0);
+      postL.position.set(0, (NET_HEIGHT + 4) / 2, -WID - 10);
       postL.castShadow = true;
       scene.add(postL);
       var postR = postL.clone();
-      postR.position.set(COURT_HALF_W + 10, (NET_HEIGHT + 4) / 2, 0);
+      postR.position.set(0, (NET_HEIGHT + 4) / 2, WID + 10);
       scene.add(postR);
       var netGroup = new THREE.Group();
-      var netMesh = new THREE.Mesh(new THREE.PlaneGeometry(COURT_HALF_W * 2 + 20, NET_HEIGHT), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+      var netMesh = new THREE.Mesh(new THREE.PlaneGeometry(WID * 2 + 20, NET_HEIGHT), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+      netMesh.rotation.y = Math.PI / 2;
       netMesh.position.set(0, NET_HEIGHT / 2, 0);
       netGroup.add(netMesh);
-      var netTapeTop = new THREE.Mesh(new THREE.BoxGeometry(COURT_HALF_W * 2 + 20, 1.4, 1.4), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      var netTapeTop = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, WID * 2 + 20), new THREE.MeshBasicMaterial({ color: 0xffffff }));
       netTapeTop.position.set(0, NET_HEIGHT, 0);
       netGroup.add(netTapeTop);
       scene.add(netGroup);
@@ -3814,6 +3819,8 @@ g.tennis = {
       var farFig = makePlayer(new THREE.Color(R.blue), 0xE8B48C);
       nearFig.armPivot.rotation.x = nearFig.restRot;
       farFig.armPivot.rotation.x = farFig.restRot;
+      nearFig.group.rotation.y = -Math.PI / 2;
+      farFig.group.rotation.y = Math.PI / 2;
       scene.add(nearFig.group);
       scene.add(farFig.group);
 
@@ -3862,16 +3869,13 @@ g.tennis = {
         }
       }
 
-      o_canvas_listeners();
-      function o_canvas_listeners() {
-        renderer.domElement.addEventListener("pointermove", onPointerMove);
-        renderer.domElement.addEventListener("touchmove", onTouchMove, { passive: false });
-      }
+      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("touchmove", onTouchMove, { passive: false });
       var keyCleanup = H(function (e) {
-        if (e.key === "ArrowLeft") { e.preventDefault(); near.x = Math.max(27, near.x - 20); }
-        else if (e.key === "ArrowRight") { e.preventDefault(); near.x = Math.min(413, near.x + 20); }
-        else if (mode === "2p" && (e.key === "a" || e.key === "A")) { e.preventDefault(); keys.left = true; }
-        else if (mode === "2p" && (e.key === "d" || e.key === "D")) { e.preventDefault(); keys.right = true; }
+        if (e.key === "ArrowUp") { e.preventDefault(); near.x = Math.max(27, near.x - 20); }
+        else if (e.key === "ArrowDown") { e.preventDefault(); near.x = Math.min(413, near.x + 20); }
+        else if (mode === "2p" && (e.key === "w" || e.key === "W")) { e.preventDefault(); keys.left = true; }
+        else if (mode === "2p" && (e.key === "s" || e.key === "S")) { e.preventDefault(); keys.right = true; }
       });
       document.addEventListener("keyup", onKeyUp);
 
@@ -3942,12 +3946,11 @@ g.tennis = {
       }
 
       function renderFrame() {
-        nearFig.group.position.set(mapX(near.x), 0, Z_NEAR + 14);
-        farFig.group.position.set(mapX(far.x), 0, Z_FAR - 14);
-        farFig.group.rotation.y = Math.PI;
+        nearFig.group.position.set(LEN + 14, 0, mapWide(near.x));
+        farFig.group.position.set(-(LEN + 14), 0, mapWide(far.x));
 
         if (ball) {
-          var wx = mapX(ball.x), wz = mapZ(ball.z);
+          var wx = mapLen(ball.z), wz = mapWide(ball.x);
           var h = (ball.height || 0) + BALL_R;
           ballMesh.position.set(wx, h, wz);
           ballMesh.rotation.x -= 0.1 + Math.abs(ball.vz) * 2;
@@ -3959,10 +3962,10 @@ g.tennis = {
           ballShadow.visible = true;
         }
 
-        var sx = 0;
-        if (shake > 0) { sx = (Math.random() - 0.5) * shake; }
-        camera.position.set(sx, 260, 560);
-        camera.lookAt(0, 30, -180);
+        var sz = 0;
+        if (shake > 0) { sz = (Math.random() - 0.5) * shake; }
+        camera.position.set(0, 220, 430 + sz);
+        camera.lookAt(0, 20, 0);
 
         renderer.render(scene, camera);
       }
