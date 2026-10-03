@@ -4637,6 +4637,13 @@ g.golf = {
       ];
       var greenIdx = 1, mode = "1p";
 
+      var POVS = [
+        { name: "Overhead", pos: [0, 380, 280], look: [0, 0, -40], fov: 58 },
+        { name: "Behind Tee", pos: [0, 170, 300], look: [0, 10, -80], fov: 56 },
+        { name: "High Cam", pos: [0, 540, 40], look: [0, 0, -40], fov: 46 }
+      ];
+      var povIdx = 0;
+
       var holeIdx, ballBody, hole, obstacles, par, strokes, totalStrokes, totalPar, moving, drag, turn, p1Total, p2Total, flagWave, raf, last, lastLabel, roundOver;
 
       Matter.Resolver._restingThresh = 0.001;
@@ -4755,9 +4762,13 @@ g.golf = {
           '<span class="opt-group"><span class="opt-label">GREEN</span>' +
           GREENS.map(function (g2, i) { return '<button type="button" class="opt-btn' + (i === greenIdx ? " active" : "") + '" data-diff="' + i + '">' + g2.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { greenIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -4779,8 +4790,14 @@ g.golf = {
       scene.fog = new THREE.Fog(0x0c2420, 500, 1300);
 
       var camera = new THREE.PerspectiveCamera(58, VIEW_W/VIEW_H, 1, 2000);
-      camera.position.set(0, 380, 280);
-      camera.lookAt(0, 0, -40);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0x80ffcc, 0.55));
       var sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -4857,6 +4874,10 @@ g.golf = {
         }
 
         if (flagWave > 0) { flag.rotation.y = Math.sin(flagWave) * 0.4; flagWave -= 0.6; } else { flag.rotation.y = 0; }
+
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0], pv.pos[1], pv.pos[2]);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
