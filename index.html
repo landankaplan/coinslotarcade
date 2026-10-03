@@ -4213,6 +4213,13 @@ g.boxing = {
       ];
       var diffIdx = 1, mode = "1p";
 
+      var POVS = [
+        { name: "Ringside", pos: [0, 70, 190], look: [0, 35, 0], fov: 50 },
+        { name: "Corner Cam", pos: [150, 115, 115], look: [0, 28, 0], fov: 50 },
+        { name: "Overhead", pos: [0, 250, 50], look: [0, 0, -10], fov: 54 }
+      ];
+      var povIdx = 0;
+
       var hp, oppHp, hits, misses, cueCount, waiting, resolved, cue, cueStart, pendingTimer, p1Wins, p2Wins, streak, particles, shake, punchAnim, koFlag, raf, last;
 
       // ---- punch-reach physics: one Matter body drives the glove's forward
@@ -4371,9 +4378,13 @@ g.boxing = {
           '<span class="opt-group"><span class="opt-label">SPEED</span>' +
           DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player Duel</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player Duel</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -4397,8 +4408,14 @@ g.boxing = {
       scene.fog = new THREE.Fog(0x1a0f0f, 260, 700);
 
       var camera = new THREE.PerspectiveCamera(50, VIEW_W / VIEW_H, 1, 1500);
-      camera.position.set(0, 70, 190);
-      camera.lookAt(0, 35, 0);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0xffe0cf, 0.55));
       var spot = new THREE.DirectionalLight(0xffffff, 1.15);
@@ -4561,8 +4578,9 @@ g.boxing = {
 
         var sx = 0, sz = 0;
         if (shake > 0) { sx = (Math.random() - 0.5) * shake; sz = (Math.random() - 0.5) * shake * 0.4; }
-        camera.position.set(sx, 70, 190 + sz);
-        camera.lookAt(0, 35, 0);
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0] + sx, pv.pos[1], pv.pos[2] + sz);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
