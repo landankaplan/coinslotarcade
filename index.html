@@ -3632,6 +3632,13 @@ g.tennis = {
       ];
       var diffIdx = 1, mode = "1p";
 
+      var POVS = [
+        { name: "Broadcast", pos: [0, 220, 430], look: [0, 20, 0], fov: 62 },
+        { name: "Near Baseline", pos: [420, 70, 0], look: [-200, 30, 0], fov: 58 },
+        { name: "Far Baseline", pos: [-420, 70, 0], look: [200, 30, 0], fov: 58 }
+      ];
+      var povIdx = 0;
+
       // Court laid out HORIZONTALLY: baseline-to-baseline ("ball.z") runs
       // left-right on screen (world X); sideline coverage ("ball.x") runs
       // toward/away from the camera (world Z), which the elevated camera
@@ -3749,9 +3756,13 @@ g.tennis = {
           '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
           DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -3773,8 +3784,14 @@ g.tennis = {
       scene.fog = new THREE.Fog(0x0c1a2e, 520, 1450);
 
       var camera = new THREE.PerspectiveCamera(62, VIEW_W / VIEW_H, 1, 2000);
-      camera.position.set(0, 220, 430);
-      camera.lookAt(0, 20, 0);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0xcfe0ff, 0.65));
       var sun = new THREE.DirectionalLight(0xffffff, 1.05);
@@ -4033,8 +4050,9 @@ g.tennis = {
 
         var sz = 0;
         if (shake > 0) { sz = (Math.random() - 0.5) * shake; }
-        camera.position.set(0, 220, 430 + sz);
-        camera.lookAt(0, 20, 0);
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0], pv.pos[1], pv.pos[2] + sz);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
