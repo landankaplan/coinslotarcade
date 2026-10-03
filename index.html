@@ -3336,6 +3336,13 @@ g.airhockey = {
       var diffIdx = 1, mode = "1p";
       var MALLET_R = 16, PUCK_R = 11, GOAL_HALF = 45;
 
+      var POVS = [
+        { name: "Overhead", pos: [0, 430, 230], look: [0, 0, -30], fov: 56 },
+        { name: "Player End", pos: [0, 110, 370], look: [0, 30, -180], fov: 58 },
+        { name: "CPU End", pos: [0, 110, -370], look: [0, 30, 180], fov: 58 }
+      ];
+      var povIdx = 0;
+
       var player, cpu, puck, prevCpu, prevPlayer, playerScore, cpuScore, running, shake, speedMul, streak, raf, last;
       var keys = { up: false, down: false, left: false, right: false };
 
@@ -3435,9 +3442,13 @@ g.airhockey = {
           '<span class="opt-group"><span class="opt-label">CPU LEVEL</span>' +
           DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '"' + (mode === "2p" ? " disabled" : "") + ">" + d.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">vs CPU</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { if (mode !== "2p") { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); reset(); } }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); reset(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -3459,8 +3470,14 @@ g.airhockey = {
       scene.fog = new THREE.Fog(0x0a1420, 500, 1200);
 
       var camera = new THREE.PerspectiveCamera(56, VIEW_W/VIEW_H, 1, 2000);
-      camera.position.set(0, 430, 230);
-      camera.lookAt(0, 0, -30);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0xbfe8ff, 0.6));
       var sun = new THREE.DirectionalLight(0xffffff, 1.05);
@@ -3602,8 +3619,9 @@ g.airhockey = {
 
         var sx = 0, sz = 0;
         if (shake > 0) { sx = (Math.random()-0.5)*shake; sz = (Math.random()-0.5)*shake; shake *= 0.85; if (shake < 0.3) shake = 0; }
-        camera.position.set(sx, 430, 230+sz);
-        camera.lookAt(0, 0, -30);
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0] + sx, pv.pos[1], pv.pos[2] + sz);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
