@@ -4978,6 +4978,13 @@ g.derby = {
       var diffIdx = 1, mode = "1p";
 
       var FENCE = 380;
+      var PLATE_Z_C = 150, MOUND_Z_C = -180;
+      var POVS = [
+        { name: "Batter's Eye", pos: [0, 70, 260], look: [0, 45, -200], fov: 64 },
+        { name: "Pitcher Cam", pos: [0, 85, MOUND_Z_C - 90], look: [0, 40, PLATE_Z_C], fov: 56 },
+        { name: "Outfield Cam", pos: [160, 150, PLATE_Z_C - FENCE + 30], look: [0, 25, PLATE_Z_C], fov: 46 }
+      ];
+      var povIdx = 0;
       var pitchesLeft, homers, streak, bestStreak, points, longest, totalDist, ball, swung, resultLabel, resultTimer, ballFlight, turn, p1Hr, p2Hr, particles, shake, raf, last;
 
       // ---- hit-flight physics: one Matter body drives the batted ball's
@@ -5015,6 +5022,7 @@ g.derby = {
         var pitchNum = 10 - pitchesLeft;
         ball = { t: 0, dur: Math.max(20, d.dur - pitchNum * 0.6), done: false };
         swung = false; resultLabel = null; ballFlight = null;
+        triggerThrow();
         updateHud();
       }
 
@@ -5111,9 +5119,13 @@ g.derby = {
           '<span class="opt-group"><span class="opt-label">PITCH SPEED</span>' +
           DIFFS.map(function (d, i) { return '<button type="button" class="opt-btn' + (i === diffIdx ? " active" : "") + '" data-diff="' + i + '">' + d.name + "</button>"; }).join("") +
           '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>' +
+          '<span class="opt-group"><span class="opt-label">VIEW</span>' +
+          POVS.map(function (p, i) { return '<button type="button" class="opt-btn' + (i === povIdx ? " active" : "") + '" data-pov="' + i + '">' + p.name + "</button>"; }).join("") +
+          '</span>';
         bar.querySelectorAll("[data-diff]").forEach(function (b) { b.addEventListener("click", function () { diffIdx = Number(b.getAttribute("data-diff")); renderOpts(); newMatch(); }); });
         bar.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { mode = b.getAttribute("data-mode"); renderOpts(); newMatch(); }); });
+        bar.querySelectorAll("[data-pov]").forEach(function (b) { b.addEventListener("click", function () { povIdx = Number(b.getAttribute("data-pov")); applyPov(); renderOpts(); }); });
       }
       renderOpts();
 
@@ -5137,8 +5149,14 @@ g.derby = {
       scene.fog = new THREE.Fog(0x0a1a12, 420, 1100);
 
       var camera = new THREE.PerspectiveCamera(64, VIEW_W / VIEW_H, 1, 1800);
-      camera.position.set(0, 70, 260);
-      camera.lookAt(0, 45, -200);
+      function applyPov() {
+        var p = POVS[povIdx];
+        camera.fov = p.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.position.set(POVS[0].pos[0], POVS[0].pos[1], POVS[0].pos[2]);
+      camera.lookAt(POVS[0].look[0], POVS[0].look[1], POVS[0].look[2]);
+      applyPov();
 
       scene.add(new THREE.AmbientLight(0xcdf5d8, 0.6));
       var sun = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -5208,6 +5226,55 @@ g.derby = {
       batter.batPivot.rotation.z = batter.restRot;
       scene.add(batter.group);
 
+      // ---- pitcher figure (mound, throwing motion on release) ----
+      function makePitcher(bodyColor, skinColor) {
+        var grp = new THREE.Group();
+        var legs = new THREE.Mesh(new THREE.CylinderGeometry(6, 7, 18, 8), new THREE.MeshStandardMaterial({ color: 0x24324a, roughness: 0.8 }));
+        legs.position.y = 9;
+        legs.castShadow = true;
+        grp.add(legs);
+        var torso = new THREE.Mesh(new THREE.BoxGeometry(16, 21, 10), new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.6 }));
+        torso.position.y = 28.5;
+        torso.castShadow = true;
+        grp.add(torso);
+        var head = new THREE.Mesh(new THREE.SphereGeometry(6.4, 14, 10), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 }));
+        head.position.y = 43;
+        head.castShadow = true;
+        grp.add(head);
+        var offArm = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.3, 13, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 }));
+        offArm.position.set(-9, 30, 0);
+        offArm.rotation.z = 0.4;
+        grp.add(offArm);
+        var armPivot = new THREE.Group();
+        armPivot.position.set(9, 36, 0);
+        grp.add(armPivot);
+        var arm = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.4, 14, 8), new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 }));
+        arm.position.y = -7;
+        arm.castShadow = true;
+        armPivot.add(arm);
+        return { group: grp, armPivot: armPivot, restRot: -1.9, throwing: false, throwT: 0 };
+      }
+      var pitcherMound = new THREE.Mesh(new THREE.CylinderGeometry(22, 26, 3, 20), new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.95 }));
+      pitcherMound.position.set(0, 1.5, MOUND_Z);
+      scene.add(pitcherMound);
+      var pitcher = makePitcher(new THREE.Color(R.blue), 0xE8B48C);
+      pitcher.group.position.set(0, 3, MOUND_Z);
+      pitcher.group.rotation.y = Math.PI;
+      pitcher.armPivot.rotation.x = pitcher.restRot;
+      scene.add(pitcher.group);
+      var THROW_DUR = 14;
+      function triggerThrow() { pitcher.throwing = true; pitcher.throwT = 0; }
+      function stepPitcherThrow() {
+        if (pitcher.throwing) {
+          pitcher.throwT++;
+          var u = Math.min(1, pitcher.throwT / THROW_DUR);
+          pitcher.armPivot.rotation.x = pitcher.restRot + u * 2.6;
+          if (u >= 1) pitcher.throwing = false;
+        } else {
+          pitcher.armPivot.rotation.x = pitcher.restRot;
+        }
+      }
+
       var SWING_DUR = 12;
       function triggerSwing() { batter.swinging = true; batter.swingT = 0; }
       function stepSwing() {
@@ -5273,6 +5340,7 @@ g.derby = {
 
       function renderFrame() {
         stepSwing();
+        stepPitcherThrow();
 
         if (ball && !ball.done) {
           var tt = Math.min(1, ball.t / ball.dur);
@@ -5310,8 +5378,9 @@ g.derby = {
 
         var sx = 0;
         if (shake > 0) { sx = (Math.random() - 0.5) * shake; shake *= 0.85; if (shake < 0.3) shake = 0; }
-        camera.position.set(sx, 70, 260);
-        camera.lookAt(0, 45, -200);
+        var pv = POVS[povIdx];
+        camera.position.set(pv.pos[0] + sx, pv.pos[1], pv.pos[2]);
+        camera.lookAt(pv.look[0], pv.look[1], pv.look[2]);
 
         renderer.render(scene, camera);
       }
