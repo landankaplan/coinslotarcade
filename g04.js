@@ -143,8 +143,138 @@ else if('Escape'===k)keyAnchor=null;
 t.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRight'],['Mark','Space']]);
 t.begin(function(){gridCount=0;score=0;keyCursor={x:4,y:4};keyboardMode=false;newGrid();t.fx=[];t.frame(tick)});
 }),w('laneLeaper',b,'Lane Leaper',o.green,'Hop across traffic and a sinking river — chain pad-fills for a rising streak bonus.','Arrows / WASD to hop · swipe on mobile',function(r){
+function startGame3D(){
 var lanes,frog,pads,lives,score,level,timer,hitLock,elapsed,streak;
-var TILE=30,W=390,ctx=r.canvas(W,390),PAD_X=[45,120,195,270,345];
+var TILE=30,W=390,ROWS=13;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+r.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:390px;aspect-ratio:1/1;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(390,390);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x12102a,1);
+canvasWrap.appendChild(renderer3d.domElement);
+r.cv=renderer3d.domElement;r.w=W;r.h=390;
+
+var timerBar=document.createElement('div');
+timerBar.style.cssText='position:absolute;left:0;bottom:0;height:4px;background:'+o.teal+';width:100%;transition:background-color .2s';
+canvasWrap.appendChild(timerBar);
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x12102a,18,34);
+var camera3d=new THREE.PerspectiveCamera(48,1,0.1,200);
+camera3d.position.set(0,15.5,10.5);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.8));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+sun3d.position.set(8,18,8);
+scene3d.add(sun3d);
+
+function mapX3d(px){return px/TILE-6.5}
+function mapZ3d(row){return row-6}
+
+var ROW_COLOR=[0x1e5a3a,0x0f2f57,0x0f2f57,0x0f2f57,0x0f2f57,0x0f2f57,0x2a2350,0x1c1c30,0x1c1c30,0x1c1c30,0x1c1c30,0x1c1c30,0x2a2350];
+for(var ri=0;ri<ROWS;ri++){
+  var bandMesh=new THREE.Mesh(new THREE.PlaneGeometry(13,1),new THREE.MeshStandardMaterial({color:ROW_COLOR[ri],roughness:0.95}));
+  bandMesh.rotation.x=-Math.PI/2;
+  bandMesh.position.set(0,0,mapZ3d(ri));
+  scene3d.add(bandMesh)
+}
+var laneLineMat3d=new THREE.LineDashedMaterial({color:0xe9fbf9,transparent:true,opacity:0.18,dashSize:0.4,gapSize:0.35});
+for(var rr=8;rr<=11;rr++){
+  var lpts=[new THREE.Vector3(-6.5,0.02,mapZ3d(rr)-0.5),new THREE.Vector3(6.5,0.02,mapZ3d(rr)-0.5)];
+  var lgeo=new THREE.BufferGeometry().setFromPoints(lpts);
+  var lline=new THREE.Line(lgeo,laneLineMat3d);
+  lline.computeLineDistances();
+  scene3d.add(lline)
+}
+
+var PAD_X=[45,120,195,270,345];
+var padMeshes3d=[],padEyeMats3d=[];
+var padEmptyMat3d=new THREE.MeshStandardMaterial({color:0x0f2f57,roughness:0.8});
+var padFullMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.green),emissive:new THREE.Color(o.green),emissiveIntensity:0.4,roughness:0.5});
+for(var pi2=0;pi2<5;pi2++){
+  var padMesh=new THREE.Mesh(new THREE.CylinderGeometry(0.47,0.47,0.18,16),padEmptyMat3d);
+  padMesh.position.set(mapX3d(PAD_X[pi2]),0.1,mapZ3d(0));
+  scene3d.add(padMesh);
+  padMeshes3d.push(padMesh)
+}
+
+var laneMeshGroups3d=[];
+function clearLaneMeshes3d(){
+  laneMeshGroups3d.forEach(function(grp){grp.forEach(function(m){scene3d.remove(m);extDisposeThree(m)})});
+  laneMeshGroups3d=[]
+}
+function buildLaneMeshes3d(){
+  clearLaneMeshes3d();
+  lanes.forEach(function(ln){
+    var group=[];
+    ln.it.forEach(function(){
+      var mesh;
+      if(ln.kind==='log')mesh=new THREE.Mesh(new THREE.BoxGeometry(ln.w/TILE,0.3,0.8),new THREE.MeshStandardMaterial({color:0xa5763b,roughness:0.85}));
+      else if(ln.kind==='turtle')mesh=new THREE.Mesh(new THREE.BoxGeometry(ln.w/TILE,0.28,0.75),new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),roughness:0.6}));
+      else mesh=new THREE.Mesh(new THREE.BoxGeometry(ln.w/TILE,0.4,0.8),new THREE.MeshStandardMaterial({color:new THREE.Color(ln.col||o.coral),roughness:0.5}));
+      scene3d.add(mesh);
+      group.push(mesh)
+    });
+    laneMeshGroups3d.push(group)
+  })
+}
+function syncLaneMeshes3d(){
+  lanes.forEach(function(ln,li){
+    var submerged=ln.kind==='turtle'&&Math.sin(elapsed*1.4+ln.row*1.7)<-.5;
+    var group=laneMeshGroups3d[li];
+    ln.it.forEach(function(px,ii){
+      var mesh=group[ii];
+      if(!mesh)return;
+      mesh.position.set(mapX3d(px+ln.w/2),ln.kind==='turtle'?(submerged?0.06:0.2):0.2,mapZ3d(ln.row));
+      mesh.visible=!(ln.kind==='turtle'&&submerged)
+    })
+  })
+}
+
+var frogGroup3d=new THREE.Group();
+var frogBodyMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.green),roughness:0.5});
+var frogBody3d=new THREE.Mesh(new THREE.SphereGeometry(0.38,12,10),frogBodyMat3d);
+frogBody3d.scale.set(1,0.7,1);
+frogGroup3d.add(frogBody3d);
+var eyeMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.ink)});
+[[-0.16,0.26,0.14],[0.16,0.26,0.14]].forEach(function(ep){
+  var eye=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8),eyeMat3d);
+  eye.position.set(ep[0],ep[1],ep[2]);
+  frogGroup3d.add(eye)
+});
+scene3d.add(frogGroup3d);
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wz,color,n){
+  var col=new THREE.Color(color);
+  for(var pi3=0;pi3<n;pi3++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,6),mat);
+    mesh.position.set(wx,0.3,wz);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.04+Math.random()*0.14;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vz:Math.sin(ang)*sp,vy:0.05+Math.random()*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.vy-=0.012;
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
 
 function makeLane(row,kind,width,gap,speed,color){
   var period=width+gap,count=Math.ceil((W+period)/period)+1,offset=f(period),instances=[];
@@ -165,7 +295,8 @@ function buildLanes(){
     makeLane(9,'car',34,90,-78*mul,o.yellow),
     makeLane(10,'car',34,110,66*mul,o.blue),
     makeLane(11,'truck',60,170,-38*mul,o.orange)
-  ]
+  ];
+  buildLaneMeshes3d()
 }
 
 function resetFrog(){frog={x:195,r:12,top:12};timer=Math.max(18,30-2*(level-1));hitLock=0}
@@ -173,7 +304,7 @@ function resetFrog(){frog={x:195,r:12,top:12};timer=Math.max(18,30-2*(level-1));
 function die(kind){
   if(hitLock>0)return;
   lives--;streak=0;
-  r.burst(frog.x,frog.r*TILE+15,kind==='car'?o.coral:'#7fb5ff',22);
+  spawnParticles3d(mapX3d(frog.x),mapZ3d(frog.r),kind==='car'?o.coral:'#7fb5ff',22);
   hitLock=.7
 }
 
@@ -192,7 +323,7 @@ function hop(dx,dy){
       pads[hit]=1;
       score+=50+2*Math.floor(timer)+25*streak;
       streak++;
-      r.burst(PAD_X[hit],15,o.green,18);
+      spawnParticles3d(mapX3d(PAD_X[hit]),mapZ3d(0),o.green,18);
       if(pads.every(function(v2){return v2})){
         score+=500;level++;pads=[0,0,0,0,0];buildLanes()
       }
@@ -214,10 +345,10 @@ function step(dt){
   if(hitLock>0){
     hitLock-=dt;
     if(hitLock<=0){
-      if(lives<=0){draw(dt);r.over(score,'Level '+level+' · Score: '+score);return}
+      if(lives<=0){render3d(dt);r.over(score,'Level '+level+' · Score: '+score);return}
       resetFrog()
     }
-    draw(dt);return
+    render3d(dt);return
   }
   timer-=dt;
   if(timer<=0){die('time')}
@@ -236,47 +367,19 @@ function step(dt){
       }
     }
   }
-  draw(dt)
+  render3d(dt)
 }
 
-function draw(dt){
-  g(ctx,W,390,'#12102a');
-  ctx.fillStyle='#1e5a3a';ctx.fillRect(0,0,W,TILE);
-  ctx.fillStyle='#0f2f57';ctx.fillRect(0,TILE,W,150);
-  ctx.fillStyle='#2a2350';ctx.fillRect(0,180,W,TILE);
-  ctx.fillRect(0,360,W,TILE);
-  ctx.fillStyle='#1c1c30';ctx.fillRect(0,210,W,150);
-  for(var i3=0;i3<5;i3++){
-    d(ctx,PAD_X[i3],15,14,'#0f2f57');
-    if(pads[i3]){d(ctx,PAD_X[i3],15,10,o.green);d(ctx,PAD_X[i3]-4,12,2.5,o.ink);d(ctx,PAD_X[i3]+4,12,2.5,o.ink)}
-  }
-  for(var rr=8;rr<=11;rr++){ctx.setLineDash([10,12]);v(ctx,0,rr*TILE,W,rr*TILE,'rgba(233,251,249,.18)',1);ctx.setLineDash([])}
-  lanes.forEach(function(ln){
-    var submerged=ln.kind==='turtle'&&Math.sin(elapsed*1.4+ln.row*1.7)<-.5;
-    ln.it.forEach(function(px){
-      var yy=ln.row*TILE;
-      if(ln.kind==='log'){
-        p(ctx,px,yy+4,ln.w,22,8,'#a5763b');p(ctx,px+6,yy+9,ln.w-12,3,2,'#c9964f')
-      }else if(ln.kind==='turtle'){
-        var cnt=Math.floor(ln.w/32);
-        for(var tt=0;tt<cnt;tt++){
-          var cx=px+16+32*tt,cy=yy+15+(submerged?6:0);
-          d(ctx,cx,cy,13,submerged?'#155e58':o.teal);
-          if(!submerged)d(ctx,cx,cy,7,'#1f9c92')
-        }
-      }else{
-        p(ctx,px,yy+4,ln.w,22,6,ln.col);p(ctx,px+(ln.sp>0?ln.w-12:4),yy+8,8,14,2,o.bg)
-      }
-    })
-  });
-  if(hitLock<=0||Math.floor(10*hitLock)%2){
-    d(ctx,frog.x,frog.r*TILE+15,11,o.green);
-    d(ctx,frog.x-5,frog.r*TILE+10,3.5,o.ink);d(ctx,frog.x+5,frog.r*TILE+10,3.5,o.ink);
-    d(ctx,frog.x-5,frog.r*TILE+10,1.5,o.bg);d(ctx,frog.x+5,frog.r*TILE+10,1.5,o.bg)
-  }
-  r.fxStep(dt);
-  ctx.fillStyle=timer<8?o.coral:o.teal;
-  ctx.fillRect(0,386,W*s(timer/30,0,1),4);
+function render3d(dt){
+  syncLaneMeshes3d();
+  for(var pi4=0;pi4<5;pi4++)padMeshes3d[pi4].material=pads[pi4]?padFullMat3d:padEmptyMat3d;
+  var blink=hitLock<=0||Math.floor(10*hitLock)%2;
+  frogGroup3d.visible=!!blink;
+  if(blink)frogGroup3d.position.set(mapX3d(frog.x),0.22,mapZ3d(frog.r));
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
+  timerBar.style.width=(100*s(timer/30,0,1))+'%';
+  timerBar.style.background=timer<8?o.coral:o.teal;
   r.hud([['SCORE',y(score)],['LIVES',lives],['LEVEL',level],['STREAK',streak]])
 }
 
@@ -288,12 +391,19 @@ r.pointer({down:function(pt){
   else hop(0,-1)
 }});
 r.pad([['▲','ArrowUp'],['◀','ArrowLeft'],['▶','ArrowRight'],['▼','ArrowDown']]);
+r.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 r.begin(function(){
   lives=3;score=0;level=1;pads=[0,0,0,0,0];elapsed=0;streak=0;
-  r.fx=[];
   buildLanes();resetFrog();
   r.frame(step)
 })
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('swarmStrike',b,'Swarm Strike',o.magenta,'Shoot down a swarm that swoops in, forms up and dive-bombs you — armored flagships take two hits.','Arrows / A D to move · hold Space to fire',function(a){
 var W=400,H=480,ctx=a.canvas(W,H),COLORS=[o.magenta,o.orange,o.yellow,o.green,o.blue];
 var px,bullets,enemyBullets,enemies,lives,score,wave,fireCd,diveCd,invuln,animT,combo,comboTimer;

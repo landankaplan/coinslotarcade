@@ -134,8 +134,105 @@ a.begin(function(){
   a.frame(step)
 })
 }),w('skyShield',b,'Sky Shield',o.teal,'Aim, tap and detonate. Keep six cities alive, chain blasts for bonus combos, and hoard ammo to rebuild.','Click / tap to fire · or arrows to aim and Space to fire',function(a){
-var W=400,H=400,ctx=a.canvas(W,H),CITY_X=[45,95,145,255,305,355],BATTERY_X=[20,200,380];
+function startGame3D(){
+var W=400,H=400,CITY_X=[45,95,145,255,305,355],BATTERY_X=[20,200,380];
 var cities,ammo,enemyMissiles,interceptors,explosions,aimX,aimY,wave,score,missilesLeft,spawnCd,combo,comboTimer;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+a.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:1/1;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){a.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(400,400);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x090417,1);
+canvasWrap.appendChild(renderer3d.domElement);
+a.cv=renderer3d.domElement;a.w=W;a.h=H;
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x090417,20,46);
+var camera3d=new THREE.PerspectiveCamera(50,1,0.1,200);
+camera3d.position.set(0,2,25);
+camera3d.lookAt(0,-2,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.85));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.8);
+sun3d.position.set(6,14,14);
+scene3d.add(sun3d);
+
+var starGeo3d=new THREE.BufferGeometry();
+var starPos3d=[];
+for(var si3=0;si3<100;si3++){starPos3d.push((Math.random()*2-1)*15,Math.random()*9+2,-8-Math.random()*10)}
+starGeo3d.setAttribute('position',new THREE.Float32BufferAttribute(starPos3d,3));
+scene3d.add(new THREE.Points(starGeo3d,new THREE.PointsMaterial({color:0xe9fbf9,size:0.07,transparent:true,opacity:0.75})));
+
+function mapX3d(px){return px/W*20-10}
+function mapY3d(py){return 10-py/H*20}
+
+var groundMesh3d=new THREE.Mesh(new THREE.PlaneGeometry(22,3),new THREE.MeshStandardMaterial({color:0x1d1a3c,roughness:0.95}));
+groundMesh3d.rotation.x=-Math.PI/2;
+groundMesh3d.position.set(0,mapY3d(389),-0.3);
+scene3d.add(groundMesh3d);
+
+var cityAliveMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),emissive:new THREE.Color(o.teal),emissiveIntensity:0.25,roughness:0.5});
+var cityDeadMat3d=new THREE.MeshStandardMaterial({color:0x3a2a7a,roughness:0.9});
+var cityMeshes3d=[];
+CITY_X.forEach(function(cx){
+  var grp=new THREE.Group();
+  var base=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.6,0.9),cityAliveMat3d);
+  base.position.y=0.3;
+  grp.add(base);
+  var t1=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.5,0.3),cityAliveMat3d);
+  t1.position.set(-0.3,0.85,0);
+  grp.add(t1);
+  var t2=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.4,0.3),cityAliveMat3d);
+  t2.position.set(0.15,0.8,0);
+  grp.add(t2);
+  var rubble=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.2,0.8),cityDeadMat3d);
+  rubble.position.y=0.1;
+  rubble.visible=false;
+  grp.add(rubble);
+  grp.position.set(mapX3d(cx),mapY3d(389),0.4);
+  scene3d.add(grp);
+  cityMeshes3d.push({grp:grp,alive:[base,t1,t2],rubble:rubble})
+});
+
+var batteryAliveMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.violet),emissive:new THREE.Color(o.violet),emissiveIntensity:0.3,roughness:0.5});
+var batteryDeadMat3d=new THREE.MeshStandardMaterial({color:0x3a2a7a,roughness:0.9});
+var batteryMeshes3d=[];
+BATTERY_X.forEach(function(bx){
+  var mesh=new THREE.Mesh(new THREE.ConeGeometry(0.7,0.9,4),batteryAliveMat3d);
+  mesh.position.set(mapX3d(bx),mapY3d(389)+0.45,0.4);
+  mesh.rotation.y=Math.PI/4;
+  scene3d.add(mesh);
+  batteryMeshes3d.push(mesh)
+});
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c=grp.children.pop();
+    grp.remove(c);
+    extDisposeThree(c)
+  }
+}
+var missileGroup3d=new THREE.Group();scene3d.add(missileGroup3d);
+var interceptorGroup3d=new THREE.Group();scene3d.add(interceptorGroup3d);
+var explosionGroup3d=new THREE.Group();scene3d.add(explosionGroup3d);
+
+var missileLineMat3d=new THREE.LineBasicMaterial({color:new THREE.Color(o.coral)});
+var missileHeadMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+var interceptorLineMat3d=new THREE.LineBasicMaterial({color:new THREE.Color(o.blue)});
+
+var reticleGroup3d=new THREE.Group();
+var reticleMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+var rh=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.08,0.08),reticleMat3d);
+var rv=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,0.08),reticleMat3d);
+reticleGroup3d.add(rh);reticleGroup3d.add(rv);
+scene3d.add(reticleGroup3d);
 
 function nearestBattery(tx){
   var bestDist=1e9,bestIdx=-1;
@@ -173,6 +270,29 @@ function initWave(){
   missilesLeft=6+3*wave;spawnCd=1
 }
 
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wy,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,6),mat);
+    mesh.position.set(wx,wy,0.4);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.04+Math.random()*0.15;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp*0.6+0.04,vz:(Math.random()-0.5)*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.vy-=0.01;
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
 function step(dt){
   aimX=s(aimX+220*a.ax()*dt,0,W);
   aimY=s(aimY+220*a.ay()*dt,0,340);
@@ -203,7 +323,7 @@ function step(dt){
     if(mdist<ms.sp*dt){
       explosions.push({x:ms.tx,y:ms.ty,t:0,m:26,bad:!0});
       var cIdx=CITY_X.findIndex(function(cx,idx2){return cities[idx2]&&Math.abs(cx-ms.tx)<2});
-      if(cIdx>=0){cities[cIdx]=0;a.burst(ms.tx,ms.ty,o.coral,20)}
+      if(cIdx>=0){cities[cIdx]=0;spawnParticles3d(mapX3d(ms.tx),mapY3d(ms.ty),o.coral,20)}
       var bIdx=BATTERY_X.indexOf(ms.tx);
       if(bIdx>=0)ammo[bIdx]=0;
       enemyMissiles.splice(mi,1)
@@ -221,7 +341,7 @@ function step(dt){
           var mult=1+Math.min(4,Math.floor(combo/3));
           score+=25*mult;combo++;comboTimer=2;
           explosions.push({x:ms.x,y:ms.y,t:0,m:26,bad:!1});
-          a.burst(ms.x,ms.y,o.yellow,8);
+          spawnParticles3d(mapX3d(ms.x),mapY3d(ms.y),o.yellow,8);
           enemyMissiles.splice(mi,1);
           break
         }
@@ -230,7 +350,7 @@ function step(dt){
   }
   var aliveCount=0;
   cities.forEach(function(v2){aliveCount+=v2});
-  if(aliveCount===0&&!explosions.length){draw(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
+  if(aliveCount===0&&!explosions.length){render3d(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
   if(aliveCount!==0){
     if(!missilesLeft&&!enemyMissiles.length&&!explosions.length&&!interceptors.length){
       var bonus=100*aliveCount+5*ammo[0]+5*ammo[1]+5*ammo[2];
@@ -243,41 +363,68 @@ function step(dt){
       initWave()
     }
   }
-  draw(dt)
+  render3d(dt)
 }
 
-function draw(dt){
-  g(ctx,W,H);
-  ctx.fillStyle='#1d1a3c';ctx.fillRect(0,378,W,22);
-  cities.forEach(function(alive,idx){
-    if(alive){p(ctx,CITY_X[idx]-14,366,28,12,2,o.teal);p(ctx,CITY_X[idx]-8,358,6,10,1,o.teal);p(ctx,CITY_X[idx]+2,360,6,8,1,o.teal)}
-    else p(ctx,CITY_X[idx]-12,375,24,4,1,'#3a2a7a')
+function render3d(dt){
+  cityMeshes3d.forEach(function(cm,idx){
+    var alive=!!cities[idx];
+    cm.alive.forEach(function(m){m.visible=alive});
+    cm.rubble.visible=!alive
   });
-  BATTERY_X.forEach(function(bx,idx){
-    ctx.beginPath();ctx.moveTo(bx-14,378);ctx.lineTo(bx,364);ctx.lineTo(bx+14,378);ctx.closePath();
-    ctx.fillStyle=ammo[idx]?o.violet:'#3a2a7a';ctx.fill();
-    x(ctx,ammo[idx],bx,388,10,o.ink)
+  batteryMeshes3d.forEach(function(bm,idx){bm.material=ammo[idx]?batteryAliveMat3d:batteryDeadMat3d});
+
+  disposeGroupChildren(missileGroup3d);
+  enemyMissiles.forEach(function(ms){
+    var pts=[new THREE.Vector3(mapX3d(ms.sx),mapY3d(ms.sy),0.4),new THREE.Vector3(mapX3d(ms.x),mapY3d(ms.y),0.4)];
+    var geo=new THREE.BufferGeometry().setFromPoints(pts);
+    missileGroup3d.add(new THREE.Line(geo,missileLineMat3d));
+    var head=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),missileHeadMat3d);
+    head.position.set(mapX3d(ms.x),mapY3d(ms.y),0.4);
+    missileGroup3d.add(head)
   });
-  enemyMissiles.forEach(function(ms){v(ctx,ms.sx,ms.sy,ms.x,ms.y,o.coral,1.5);d(ctx,ms.x,ms.y,2.5,o.ink)});
-  interceptors.forEach(function(ic){v(ctx,ic.sx,ic.sy,ic.x,ic.y,o.blue,1.5);d(ctx,ic.x,ic.y,2.5,o.ink)});
+
+  disposeGroupChildren(interceptorGroup3d);
+  interceptors.forEach(function(ic){
+    var pts=[new THREE.Vector3(mapX3d(ic.sx),mapY3d(ic.sy),0.4),new THREE.Vector3(mapX3d(ic.x),mapY3d(ic.y),0.4)];
+    var geo=new THREE.BufferGeometry().setFromPoints(pts);
+    interceptorGroup3d.add(new THREE.Line(geo,interceptorLineMat3d));
+    var head=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),missileHeadMat3d);
+    head.position.set(mapX3d(ic.x),mapY3d(ic.y),0.4);
+    interceptorGroup3d.add(head)
+  });
+
+  disposeGroupChildren(explosionGroup3d);
   explosions.forEach(function(ex){
-    var rad=ex.m*Math.sin(Math.min(1,ex.t/1.3)*Math.PI);
-    d(ctx,ex.x,ex.y,Math.max(.1,rad),ex.bad?'rgba(255,107,74,.6)':'rgba(255,209,102,.55)')
+    var rad=Math.max(0.05,ex.m*Math.sin(Math.min(1,ex.t/1.3)*Math.PI)/400*20);
+    var mat=new THREE.MeshBasicMaterial({color:ex.bad?0xff6b4a:0xffd166,transparent:true,opacity:0.6});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(rad,10,10),mat);
+    mesh.position.set(mapX3d(ex.x),mapY3d(ex.y),0.4);
+    explosionGroup3d.add(mesh)
   });
-  v(ctx,aimX-9,aimY,aimX+9,aimY,o.ink,1.5);
-  v(ctx,aimX,aimY-9,aimX,aimY+9,o.ink,1.5);
-  a.fxStep(dt);
-  a.hud([['SCORE',y(score)],['WAVE',wave],['CITIES',cities.reduce(function(s2,v4){return s2+v4},0)],['COMBO','x'+(1+Math.min(4,Math.floor(combo/3)))]])
+
+  reticleGroup3d.position.set(mapX3d(aimX),mapY3d(aimY),0.5);
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
+  a.hud([['SCORE',y(score)],['WAVE',wave],['CITIES',cities.reduce(function(s2,v4){return s2+v4},0)],['COMBO','x'+(1+Math.min(4,Math.floor(combo/3)))],['AMMO',ammo.join('/')]])
 }
 
 a.press=function(k){if(k===' ')fireInterceptor(aimX,aimY)};
 a.pointer({down:function(pt){aimX=pt.x;aimY=pt.y;fireInterceptor(pt.x,pt.y)},move:function(pt){aimX=pt.x;aimY=pt.y}});
+a.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 a.begin(function(){
   cities=[1,1,1,1,1,1];wave=1;score=0;aimX=200;aimY=200;combo=0;comboTimer=0;
-  a.fx=[];
   initWave();
   a.frame(step)
 })
+}
+ext3DLoadGate(a.el,startGame3D)
 }),w('softTouchdown',b,'Soft Touchdown',o.violet,'Feather the thrusters through crosswinds and pick a pad — the safe strip or the narrow bonus pad — before fuel runs out.','Left/Right rotate · Up thrust · land slow, level and on a pad',function(a){
 function startGame3D(){
 var W=400,H=400;
