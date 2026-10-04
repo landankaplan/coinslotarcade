@@ -92,172 +92,331 @@ g.snake = {
   category: "Arcade Classics",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12c0-4 3-7 7-7s6 3 6 6-2 5-5 5-4-2-4-4 1-3 3-3"/><circle cx="18" cy="6" r="1.5" fill="currentColor"/></svg>',
   mount: function(el, t) {
-    var cell = 20, cols = 22, rows = 22;
-    var o = A(el, cols * cell, rows * cell);
-    var ctx = o.ctx, W = o.w, H_ = o.h;
-    var snake, dir, nextDir, food, obstacles, score, combo, comboDecay, speed, tickAcc, last, particles, shake, state, raf;
+    function startGame3D(){
+      var cell = 20, cols = 22, rows = 22;
+      var boardHalfW = cols / 2, boardHalfD = rows / 2;
+      function mapX(gx) { return gx - boardHalfW + 0.5; }
+      function mapZ(gy) { return gy - boardHalfD + 0.5; }
 
-    function reset() {
-      snake = [{x:10,y:11},{x:9,y:11},{x:8,y:11}];
-      dir = {x:1,y:0}; nextDir = dir;
-      obstacles = [];
-      score = 0; combo = 1; comboDecay = 0;
-      speed = 140; tickAcc = 0;
-      particles = []; shake = 0;
-      state = 'playing';
-      placeFood();
-      updateHud();
-    }
+      var snake, dir, nextDir, food, obstacles, score, combo, comboDecay, speed, tickAcc, last, particles, shake, state, raf;
 
-    function placeFood() {
-      var p, tries = 0;
-      do {
-        p = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
-        tries++;
-      } while (tries<200 && (snake.some(function(s){return s.x===p.x&&s.y===p.y;}) || obstacles.some(function(ob){return ob.x===p.x&&ob.y===p.y;})));
-      food = p;
-    }
+      // ---------------- 3D rendering setup ----------------
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
 
-    function maybeAddObstacle() {
-      var target = Math.floor(score/6);
-      while (obstacles.length < Math.min(target, 12)) {
-        var p, tries = 0, ok = false;
-        while (tries<50 && !ok) {
-          p = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
-          tries++;
-          ok = !snake.some(function(s){return s.x===p.x&&s.y===p.y;}) &&
-               !(food.x===p.x && food.y===p.y) &&
-               !(Math.abs(p.x-snake[0].x)<3 && Math.abs(p.y-snake[0].y)<3);
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:420px;aspect-ratio:1/1;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
+
+      var VIEW_W = 420, VIEW_H = 420;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x171233, 1);
+      canvasWrap.appendChild(renderer.domElement);
+
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x171233, 26, 60);
+
+      var camera = new THREE.PerspectiveCamera(48, VIEW_W / VIEW_H, 0.1, 200);
+      var povBase = [0, 20.5, 15.5];
+      camera.position.set(povBase[0], povBase[1], povBase[2]);
+      camera.lookAt(0, 0, 0.5);
+
+      scene.add(new THREE.AmbientLight(0xcfe9ff, 0.7));
+      var sun = new THREE.DirectionalLight(0xffffff, 0.95);
+      sun.position.set(8, 24, 10);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024, 1024);
+      scene.add(sun);
+
+      var floor = new THREE.Mesh(new THREE.PlaneGeometry(cols + 0.4, rows + 0.4), new THREE.MeshStandardMaterial({ color: 0x1c1640, roughness: 0.95 }));
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      var gridMat = new THREE.LineBasicMaterial({ color: 0x241c47, transparent: true, opacity: 0.9 });
+      var gridPts = [];
+      for (var gx = 0; gx <= cols; gx++) {
+        gridPts.push(mapX(gx) - 0.5, 0.01, mapZ(0) - 0.5, mapX(gx) - 0.5, 0.01, mapZ(rows) - 0.5);
+      }
+      for (var gy = 0; gy <= rows; gy++) {
+        gridPts.push(mapX(0) - 0.5, 0.01, mapZ(gy) - 0.5, mapX(cols) - 0.5, 0.01, mapZ(gy) - 0.5);
+      }
+      var gridGeo = new THREE.BufferGeometry();
+      gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3));
+      scene.add(new THREE.LineSegments(gridGeo, gridMat));
+
+      var wallMat = new THREE.MeshStandardMaterial({ color: 0x2a2155, roughness: 0.8 });
+      [
+        [0, mapZ(-0.6), cols + 0.4, 0.3],
+        [0, mapZ(rows + 0.6), cols + 0.4, 0.3],
+      ].forEach(function (w) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w[2], 0.6, 0.3), wallMat);
+        m.position.set(w[0], 0.3, w[1]);
+        scene.add(m);
+      });
+      [
+        [mapX(-0.6), 0, 0.3, rows + 0.4],
+        [mapX(cols + 0.6), 0, 0.3, rows + 0.4],
+      ].forEach(function (w) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, w[3]), wallMat);
+        m.position.set(w[0], 0.3, w[1]);
+        scene.add(m);
+      });
+
+      var bodyBoxGeo = new THREE.BoxGeometry(0.8, 0.7, 0.8);
+      var headBoxGeo = new THREE.BoxGeometry(0.86, 0.76, 0.86);
+      var eyeGeo = new THREE.SphereGeometry(0.07, 8, 6);
+      var eyeMat = new THREE.MeshBasicMaterial({ color: 0x0b0518 });
+      var obstacleGeo = new THREE.BoxGeometry(0.78, 0.5, 0.78);
+      var obstacleMat = new THREE.MeshStandardMaterial({ color: 0x5b4aa8, roughness: 0.7 });
+      var foodMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(R.yellow), emissive: new THREE.Color(R.yellow), emissiveIntensity: 0.5, roughness: 0.4 });
+      var foodMesh = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), foodMat);
+      foodMesh.castShadow = true;
+      scene.add(foodMesh);
+
+      var segMeshes = [];
+      var headGroup = null;
+      var obstacleMeshes = [];
+      var particleMeshes = [];
+
+      function makeHeadGroup() {
+        var grp = new THREE.Group();
+        var box = new THREE.Mesh(headBoxGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color(R.green), roughness: 0.5 }));
+        box.castShadow = true;
+        grp.add(box);
+        var eyeL = new THREE.Mesh(eyeGeo, eyeMat); grp.add(eyeL);
+        var eyeR = new THREE.Mesh(eyeGeo, eyeMat); grp.add(eyeR);
+        grp.userData.eyeL = eyeL; grp.userData.eyeR = eyeR;
+        return grp;
+      }
+
+      function clearSegMeshes() {
+        segMeshes.forEach(function (m) { scene.remove(m); csaDisposeThree(m); });
+        segMeshes = [];
+        if (headGroup) {
+          scene.remove(headGroup);
+          headGroup.traverse(function (o) { if (o.isMesh) csaDisposeThree(o); });
+          headGroup = null;
         }
-        if (ok) obstacles.push(p); else break;
       }
-    }
-
-    function updateHud() {
-      var best = t.getHighScore('snake');
-      t.setHud('<div style="display:flex;gap:16px;align-items:center"><div style="font-size:22px;font-weight:700;color:'+R.green+'">'+score+'</div><div style="font-size:12px;color:'+R.dim+'">combo x'+combo+'</div><div style="font-size:12px;color:'+R.dim+'">best '+Math.max(best,score)+'</div></div>');
-    }
-
-    function burst(x,y,color) {
-      for (var i=0;i<14;i++) {
-        var a = Math.random()*Math.PI*2, sp = 1+Math.random()*3;
-        particles.push({x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color:color});
+      function clearObstacleMeshes() {
+        obstacleMeshes.forEach(function (m) { scene.remove(m); csaDisposeThree(m); });
+        obstacleMeshes = [];
       }
-    }
+      function clearParticleMeshes() {
+        particleMeshes.forEach(function (p) { scene.remove(p.mesh); csaDisposeThree(p.mesh); });
+        particleMeshes = [];
+      }
 
-    function step() {
-      dir = nextDir;
-      var head = {x: snake[0].x+dir.x, y: snake[0].y+dir.y};
-      if (head.x<0||head.x>=cols||head.y<0||head.y>=rows) return die();
-      if (snake.some(function(s){return s.x===head.x&&s.y===head.y;})) return die();
-      if (obstacles.some(function(ob){return ob.x===head.x&&ob.y===head.y;})) return die();
-      snake.unshift(head);
-      if (head.x===food.x && head.y===food.y) {
-        combo = comboDecay>0 ? Math.min(combo+1,9) : 1;
-        comboDecay = 3000;
-        score += 1*combo;
-        burst(head.x*cell+cell/2, head.y*cell+cell/2, R.yellow);
-        speed = Math.max(60, 140 - score*1.5);
-        maybeAddObstacle();
+      function syncSegMeshes() {
+        if (!headGroup) { headGroup = makeHeadGroup(); scene.add(headGroup); }
+        var bodyCount = snake.length - 1;
+        while (segMeshes.length < bodyCount) {
+          var mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(R.teal), roughness: 0.55, transparent: true, opacity: 1 });
+          var m = new THREE.Mesh(bodyBoxGeo, mat);
+          m.castShadow = true;
+          scene.add(m);
+          segMeshes.push(m);
+        }
+        while (segMeshes.length > bodyCount) {
+          var rm = segMeshes.pop();
+          scene.remove(rm); csaDisposeThree(rm);
+        }
+      }
+      function syncObstacleMeshes() {
+        while (obstacleMeshes.length < obstacles.length) {
+          var m = new THREE.Mesh(obstacleGeo, obstacleMat);
+          m.castShadow = true;
+          scene.add(m);
+          obstacleMeshes.push(m);
+        }
+      }
+
+      function spawnParticles(wx, wy, wz, color) {
+        var c = new THREE.Color(color);
+        for (var i = 0; i < 14; i++) {
+          var mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1 });
+          var mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), mat);
+          mesh.position.set(wx, wy, wz);
+          scene.add(mesh);
+          var a = Math.random() * Math.PI * 2, sp = 0.05 + Math.random() * 0.12;
+          particleMeshes.push({ mesh: mesh, vx: Math.cos(a) * sp, vy: 0.08 + Math.random() * 0.08, vz: Math.sin(a) * sp, life: 1 });
+        }
+      }
+      function stepParticleMeshes() {
+        for (var i = particleMeshes.length - 1; i >= 0; i--) {
+          var p = particleMeshes[i];
+          p.vy -= 0.01;
+          p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
+          p.life -= 0.035;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0 || p.mesh.position.y < -2) { scene.remove(p.mesh); csaDisposeThree(p.mesh); particleMeshes.splice(i, 1); }
+        }
+      }
+
+      // ---------------- game logic (unchanged from the 2D version) ----------------
+      function reset() {
+        snake = [{x:10,y:11},{x:9,y:11},{x:8,y:11}];
+        dir = {x:1,y:0}; nextDir = dir;
+        obstacles = [];
+        score = 0; combo = 1; comboDecay = 0;
+        speed = 140; tickAcc = 0;
+        particles = []; shake = 0;
+        state = 'playing';
+        clearSegMeshes(); clearObstacleMeshes(); clearParticleMeshes();
         placeFood();
         updateHud();
-      } else {
-        snake.pop();
       }
-    }
 
-    function die() {
-      if (state!=='playing') return;
-      state = 'over';
-      shake = 12;
-      burst(snake[0].x*cell+cell/2, snake[0].y*cell+cell/2, R.coral);
-      t.reportScore('snake', score);
-      setTimeout(function(){
-        t.showOverlay('Game Over', 'Score '+score+' · Best '+Math.max(t.getHighScore('snake'),score), 'Play Again', function(){ t.hideOverlay(); reset(); });
-      }, 300);
-    }
-
-    function draw() {
-      ctx.save();
-      var sx = (Math.random()-0.5)*shake, sy = (Math.random()-0.5)*shake;
-      ctx.translate(sx,sy);
-      ctx.fillStyle = R.bg; ctx.fillRect(-shake,-shake,W+shake*2,H_+shake*2);
-      ctx.strokeStyle = R.grid; ctx.lineWidth = 1;
-      for (var gx=0; gx<=cols; gx++){ ctx.beginPath(); ctx.moveTo(gx*cell,0); ctx.lineTo(gx*cell,H_); ctx.stroke(); }
-      for (var gy=0; gy<=rows; gy++){ ctx.beginPath(); ctx.moveTo(0,gy*cell); ctx.lineTo(W,gy*cell); ctx.stroke(); }
-
-      ctx.fillStyle = R.dim;
-      obstacles.forEach(function(ob){ L(ctx, ob.x*cell+2, ob.y*cell+2, cell-4, cell-4, 3); ctx.fill(); });
-
-      var pulse = 1+Math.sin(performance.now()/150)*0.12;
-      ctx.fillStyle = R.yellow;
-      ctx.beginPath();
-      ctx.arc(food.x*cell+cell/2, food.y*cell+cell/2, (cell/2-3)*pulse, 0, Math.PI*2);
-      ctx.fill();
-
-      for (var i=snake.length-1;i>=0;i--) {
-        var s = snake[i];
-        ctx.fillStyle = i===0 ? R.green : R.teal;
-        ctx.globalAlpha = 1 - Math.min(0.35, (i/snake.length)*0.35);
-        L(ctx, s.x*cell+1, s.y*cell+1, cell-2, cell-2, i===0?6:4);
-        ctx.fill();
+      function placeFood() {
+        var p, tries = 0;
+        do {
+          p = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
+          tries++;
+        } while (tries<200 && (snake.some(function(s){return s.x===p.x&&s.y===p.y;}) || obstacles.some(function(ob){return ob.x===p.x&&ob.y===p.y;})));
+        food = p;
       }
-      ctx.globalAlpha = 1;
-      var head = snake[0];
-      ctx.fillStyle = R.bg;
-      var ex = head.x*cell+cell/2 + dir.x*4, ey = head.y*cell+cell/2 + dir.y*4;
-      ctx.beginPath();
-      ctx.arc(ex-dir.y*4, ey+dir.x*4, 2, 0, Math.PI*2);
-      ctx.arc(ex+dir.y*4, ey-dir.x*4, 2, 0, Math.PI*2);
-      ctx.fill();
 
-      particles.forEach(function(p){
-        ctx.globalAlpha = Math.max(p.life,0);
-        ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+      function maybeAddObstacle() {
+        var target = Math.floor(score/6);
+        while (obstacles.length < Math.min(target, 12)) {
+          var p, tries = 0, ok = false;
+          while (tries<50 && !ok) {
+            p = {x: Math.floor(Math.random()*cols), y: Math.floor(Math.random()*rows)};
+            tries++;
+            ok = !snake.some(function(s){return s.x===p.x&&s.y===p.y;}) &&
+                 !(food.x===p.x && food.y===p.y) &&
+                 !(Math.abs(p.x-snake[0].x)<3 && Math.abs(p.y-snake[0].y)<3);
+          }
+          if (ok) obstacles.push(p); else break;
+        }
+      }
+
+      function updateHud() {
+        var best = t.getHighScore('snake');
+        t.setHud('<div style="display:flex;gap:16px;align-items:center"><div style="font-size:22px;font-weight:700;color:'+R.green+'">'+score+'</div><div style="font-size:12px;color:'+R.dim+'">combo x'+combo+'</div><div style="font-size:12px;color:'+R.dim+'">best '+Math.max(best,score)+'</div></div>');
+      }
+
+      function burst(px, py, color) {
+        var gx = px / cell, gy = py / cell;
+        spawnParticles(mapX(gx - 0.5), 0.5, mapZ(gy - 0.5), color);
+      }
+
+      function step() {
+        dir = nextDir;
+        var head = {x: snake[0].x+dir.x, y: snake[0].y+dir.y};
+        if (head.x<0||head.x>=cols||head.y<0||head.y>=rows) return die();
+        if (snake.some(function(s){return s.x===head.x&&s.y===head.y;})) return die();
+        if (obstacles.some(function(ob){return ob.x===head.x&&ob.y===head.y;})) return die();
+        snake.unshift(head);
+        if (head.x===food.x && head.y===food.y) {
+          combo = comboDecay>0 ? Math.min(combo+1,9) : 1;
+          comboDecay = 3000;
+          score += 1*combo;
+          burst(head.x*cell+cell/2, head.y*cell+cell/2, R.yellow);
+          speed = Math.max(60, 140 - score*1.5);
+          maybeAddObstacle();
+          placeFood();
+          updateHud();
+        } else {
+          snake.pop();
+        }
+      }
+
+      function die() {
+        if (state!=='playing') return;
+        state = 'over';
+        shake = 12;
+        burst(snake[0].x*cell+cell/2, snake[0].y*cell+cell/2, R.coral);
+        t.reportScore('snake', score);
+        setTimeout(function(){
+          t.showOverlay('Game Over', 'Score '+score+' · Best '+Math.max(t.getHighScore('snake'),score), 'Play Again', function(){ t.hideOverlay(); reset(); });
+        }, 300);
+      }
+
+      // ---------------- render ----------------
+      function renderFrame() {
+        syncSegMeshes();
+        syncObstacleMeshes();
+
+        if (headGroup) {
+          headGroup.position.set(mapX(snake[0].x), 0.38, mapZ(snake[0].y));
+          var ex = dir.x * 0.3, ez = dir.y * 0.3;
+          headGroup.userData.eyeL.position.set(ex - dir.y*0.18, 0.12, ez + dir.x*0.18);
+          headGroup.userData.eyeR.position.set(ex + dir.y*0.18, 0.12, ez - dir.x*0.18);
+        }
+        for (var i = 0; i < segMeshes.length; i++) {
+          var s = snake[i+1];
+          segMeshes[i].position.set(mapX(s.x), 0.35, mapZ(s.y));
+          segMeshes[i].material.opacity = 1 - Math.min(0.35, ((i+1)/snake.length)*0.35);
+        }
+        for (var j = 0; j < obstacleMeshes.length; j++) {
+          var ob = obstacles[j];
+          obstacleMeshes[j].position.set(mapX(ob.x), 0.25, mapZ(ob.y));
+        }
+
+        var pulse = 1 + Math.sin(performance.now()/150)*0.12;
+        foodMesh.position.set(mapX(food.x), 0.4, mapZ(food.y));
+        foodMesh.scale.setScalar(pulse);
+
+        var sx = 0, sy = 0;
+        if (shake > 0) { sx = (Math.random()-0.5)*shake*0.04; sy = (Math.random()-0.5)*shake*0.04; }
+        camera.position.set(povBase[0]+sx, povBase[1]+sy, povBase[2]);
+        camera.lookAt(0, 0, 0.5);
+
+        renderer.render(scene, camera);
+      }
+
+      function loop(ts) {
+        if (!last) last = ts;
+        var dt = ts - last; last = ts;
+        if (state==='playing') {
+          tickAcc += dt;
+          while (tickAcc >= speed) { tickAcc -= speed; step(); }
+          if (comboDecay>0) { comboDecay -= dt; if (comboDecay<=0) { combo=1; updateHud(); } }
+        }
+        stepParticleMeshes();
+        if (shake>0) shake *= 0.85;
+        renderFrame();
+        raf = requestAnimationFrame(loop);
+      }
+
+      var keyCleanup = H(function(e){
+        var k = e.key;
+        if ((k==='ArrowUp'||k==='w') && dir.y===0) { e.preventDefault(); nextDir={x:0,y:-1}; }
+        else if ((k==='ArrowDown'||k==='s') && dir.y===0) { e.preventDefault(); nextDir={x:0,y:1}; }
+        else if ((k==='ArrowLeft'||k==='a') && dir.x===0) { e.preventDefault(); nextDir={x:-1,y:0}; }
+        else if ((k==='ArrowRight'||k==='d') && dir.x===0) { e.preventDefault(); nextDir={x:1,y:0}; }
       });
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
+      var touchCleanup = D(renderer.domElement, function(dirStr){
+        if (dirStr==='up' && dir.y===0) nextDir={x:0,y:-1};
+        else if (dirStr==='down' && dir.y===0) nextDir={x:0,y:1};
+        else if (dirStr==='left' && dir.x===0) nextDir={x:-1,y:0};
+        else if (dirStr==='right' && dir.x===0) nextDir={x:1,y:0};
+      });
 
-    function loop(ts) {
-      if (!last) last = ts;
-      var dt = ts - last; last = ts;
-      if (state==='playing') {
-        tickAcc += dt;
-        while (tickAcc >= speed) { tickAcc -= speed; step(); }
-        if (comboDecay>0) { comboDecay -= dt; if (comboDecay<=0) { combo=1; updateHud(); } }
-      }
-      particles.forEach(function(p){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; p.life-=0.03; });
-      particles = particles.filter(function(p){return p.life>0;});
-      if (shake>0) shake *= 0.85;
-      draw();
+      t.setHint('Arrows / WASD to steer · swipe on mobile · eat quickly for a combo multiplier · obstacles appear as you grow');
+      reset();
       raf = requestAnimationFrame(loop);
+
+      return function(){
+        cancelAnimationFrame(raf);
+        keyCleanup();
+        touchCleanup();
+        clearSegMeshes(); clearObstacleMeshes(); clearParticleMeshes();
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    var keyCleanup = H(function(e){
-      var k = e.key;
-      if ((k==='ArrowUp'||k==='w') && dir.y===0) nextDir={x:0,y:-1};
-      else if ((k==='ArrowDown'||k==='s') && dir.y===0) nextDir={x:0,y:1};
-      else if ((k==='ArrowLeft'||k==='a') && dir.x===0) nextDir={x:-1,y:0};
-      else if ((k==='ArrowRight'||k==='d') && dir.x===0) nextDir={x:1,y:0};
-    });
-    var touchCleanup = D(o.canvas, function(dirStr){
-      if (dirStr==='up' && dir.y===0) nextDir={x:0,y:-1};
-      else if (dirStr==='down' && dir.y===0) nextDir={x:0,y:1};
-      else if (dirStr==='left' && dir.x===0) nextDir={x:-1,y:0};
-      else if (dirStr==='right' && dir.x===0) nextDir={x:1,y:0};
-    });
-
-    t.setHint('Arrows / WASD to steer · swipe on mobile · eat quickly for a combo multiplier · obstacles appear as you grow');
-    reset();
-    raf = requestAnimationFrame(loop);
-
-    return function(){
-      cancelAnimationFrame(raf);
-      keyCleanup();
-      touchCleanup();
-    };
+    return csa3DLoadGate(el, t, startGame3D);
   }
 },g.g2048 = {
   title: "2048",
@@ -7965,277 +8124,346 @@ var O="coinslotarcade_streak",B="coinslotarcade_lastday",I="coinslotarcade_ach",
   category: "Reflex",
   icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3l7 7-2 2-7-7z"/><path d="M14 3 3 14l3 3 11-11z"/><path d="M6 17l-3 4"/></svg>',
   mount: function (el, t) {
-    var DIFFS = [
-      { name: "Easy", up: 950, gap: 720, minUp: 560, minGap: 430, rounds: 20 },
-      { name: "Medium", up: 700, gap: 540, minUp: 380, minGap: 300, rounds: 26 },
-      { name: "Hard", up: 480, gap: 380, minUp: 250, minGap: 190, rounds: 32 }
-    ];
-    var diffIdx = 1, mode = "1p";
-    var HOLE_COUNT = 9;
-    var W = 340, H = 340;
+    function startGame3D(){
+      var DIFFS = [
+        { name: "Easy", up: 950, gap: 720, minUp: 560, minGap: 430, rounds: 20 },
+        { name: "Medium", up: 700, gap: 540, minUp: 380, minGap: 300, rounds: 26 },
+        { name: "Hard", up: 480, gap: 380, minUp: 250, minGap: 190, rounds: 32 }
+      ];
+      var diffIdx = 1, mode = "1p";
+      var HOLE_COUNT = 9;
 
-    // ---- DOM scaffold ----
-    var wrap = document.createElement("div");
-    wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:" + W + "px;";
-    el.appendChild(wrap);
+      // ---------------- 3D rendering setup ----------------
+      var stackWrap = document.createElement('div');
+      stackWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+      el.appendChild(stackWrap);
 
-    var stage = document.createElement("div");
-    stage.style.cssText = "position:relative;width:100%;max-width:" + W + "px;";
-    wrap.appendChild(stage);
+      var canvasWrap = document.createElement('div');
+      canvasWrap.style.cssText = 'position:relative;width:100%;max-width:400px;aspect-ratio:1/1;margin:0 auto';
+      stackWrap.appendChild(canvasWrap);
 
-    var grid = document.createElement("div");
-    grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;transition:transform .05s linear;";
-    stage.appendChild(grid);
+      var VIEW_W = 400, VIEW_H = 400;
+      var renderer = csaMakeWebGLRenderer(canvasWrap);
+      if (!renderer) return function(){ if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap); };
+      renderer.setSize(VIEW_W, VIEW_H);
+      renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;cursor:pointer';
+      renderer.shadowMap.enabled = true;
+      renderer.setClearColor(0x171233, 1);
+      canvasWrap.appendChild(renderer.domElement);
 
-    var fx = A(stage, W, H);
-    fx.canvas.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;";
-    var fctx = fx.ctx;
+      var scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x171233, 14, 34);
 
-    var holeEls = [], mounds = [];
-    for (var i = 0; i < HOLE_COUNT; i++) {
-      var b = document.createElement("button");
-      b.type = "button";
-      b.style.cssText = "all:unset;cursor:pointer;aspect-ratio:1;border-radius:14px;background:" + R.grid + ";position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;";
-      var mound = document.createElement("span");
-      mound.style.cssText = "display:flex;align-items:center;justify-content:center;font-size:1.7rem;line-height:1;transform:translateY(40%) scale(.3);opacity:0;transition:transform .13s cubic-bezier(.34,1.56,.64,1),opacity .1s;";
-      b.appendChild(mound);
-      grid.appendChild(b);
-      holeEls.push(b);
-      mounds.push(mound);
-      (function (idx) {
-        b.addEventListener("click", function () { onHit(idx); });
-      })(i);
-    }
+      var camera = new THREE.PerspectiveCamera(48, VIEW_W / VIEW_H, 0.1, 100);
+      var povBase = [0, 7.6, 6.4];
+      camera.position.set(povBase[0], povBase[1], povBase[2]);
+      camera.lookAt(0, 0, 0);
 
-    var msg = document.createElement("div");
-    msg.style.cssText = "text-align:center;font-weight:700;min-height:1.4em;color:" + R.ink + ";";
-    wrap.appendChild(msg);
+      scene.add(new THREE.AmbientLight(0xffe8e0, 0.7));
+      var sun = new THREE.DirectionalLight(0xffffff, 1.0);
+      sun.position.set(4, 10, 6);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024, 1024);
+      scene.add(sun);
 
-    var bar = document.createElement("div");
-    bar.className = "opt-bar";
-    el.appendChild(bar);
+      var ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshStandardMaterial({ color: 0x2a2155, roughness: 0.9 }));
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
 
-    // ---- particle / screen-shake fx ----
-    var particles = [];
-    var shakeMag = 0;
-    function burst(idx, color, n, spread) {
-      var cx = (idx % 3 + 0.5) * (W / 3);
-      var cy = (Math.floor(idx / 3) + 0.5) * (H / 3);
-      for (var k = 0; k < n; k++) {
-        var a = Math.random() * Math.PI * 2;
-        var sp = (0.7 + Math.random()) * (spread || 3);
-        particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1.5, life: 1, color: color, r: 2 + Math.random() * 2.5 });
+      var SPACING = 2.3;
+      function holePos(idx) {
+        var row = Math.floor(idx / 3), col = idx % 3;
+        return { x: (col - 1) * SPACING, z: (row - 1) * SPACING };
       }
-    }
-    function shake(mag) { shakeMag = Math.max(shakeMag, mag); }
-    var raf = requestAnimationFrame(function loop() {
-      fctx.clearRect(0, 0, W, H);
-      for (var k = particles.length - 1; k >= 0; k--) {
-        var p = particles[k];
-        p.vy += 0.18;
-        p.x += p.vx; p.y += p.vy;
-        p.life -= 0.028;
-        if (p.life <= 0) { particles.splice(k, 1); continue; }
-        fctx.globalAlpha = Math.max(0, p.life);
-        fctx.fillStyle = p.color;
-        fctx.beginPath();
-        fctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        fctx.fill();
+
+      var moundGeo = new THREE.CylinderGeometry(0.92, 1.02, 0.3, 20);
+      var moundMat = new THREE.MeshStandardMaterial({ color: 0x3a2f66, roughness: 0.85 });
+      var holeGeo = new THREE.CircleGeometry(0.62, 20);
+      var holeMat = new THREE.MeshBasicMaterial({ color: 0x0b0518 });
+
+      var TYPE_COLOR = { normal: new THREE.Color(R.teal), golden: new THREE.Color(R.yellow), bomb: new THREE.Color(0x3a1414) };
+
+      var holes = [];
+      for (var hi = 0; hi < HOLE_COUNT; hi++) {
+        var p = holePos(hi);
+        var mound = new THREE.Mesh(moundGeo, moundMat);
+        mound.position.set(p.x, 0.15, p.z);
+        mound.receiveShadow = true;
+        scene.add(mound);
+        var holeDisc = new THREE.Mesh(holeGeo, holeMat);
+        holeDisc.rotation.x = -Math.PI / 2;
+        holeDisc.position.set(p.x, 0.305, p.z);
+        scene.add(holeDisc);
+
+        var moleGroup = new THREE.Group();
+        var moleMat = new THREE.MeshStandardMaterial({ color: TYPE_COLOR.normal, roughness: 0.4, emissive: 0x000000 });
+        var moleBody = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 12), moleMat);
+        moleBody.scale.set(1, 1.35, 1);
+        moleBody.castShadow = true;
+        moleGroup.add(moleBody);
+        var moleHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), moleMat);
+        moleHead.position.y = 0.42;
+        moleHead.castShadow = true;
+        moleGroup.add(moleHead);
+        var hitBox = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1.6, 12), new THREE.MeshBasicMaterial({ visible: false }));
+        hitBox.position.y = 0.2;
+        hitBox.userData.holeIdx = hi;
+        moleGroup.add(hitBox);
+        moleGroup.position.set(p.x, -1.1, p.z);
+        scene.add(moleGroup);
+
+        holes.push({ mole: moleGroup, mat: moleMat, hitBox: hitBox, up: false, t: 0, type: null });
       }
-      fctx.globalAlpha = 1;
-      if (shakeMag > 0.4) {
-        grid.style.transform = "translate(" + ((Math.random() * 2 - 1) * shakeMag).toFixed(1) + "px," + ((Math.random() * 2 - 1) * shakeMag).toFixed(1) + "px)";
-        shakeMag *= 0.82;
-      } else if (shakeMag !== 0) {
-        shakeMag = 0;
-        grid.style.transform = "translate(0,0)";
+
+      var raycaster = new THREE.Raycaster();
+      var pointerNDC = new THREE.Vector2();
+      function onCanvasClick(e) {
+        var rect = renderer.domElement.getBoundingClientRect();
+        var cx = (e.clientX !== undefined ? e.clientX : (e.changedTouches && e.changedTouches[0].clientX));
+        var cy = (e.clientY !== undefined ? e.clientY : (e.changedTouches && e.changedTouches[0].clientY));
+        pointerNDC.x = ((cx - rect.left) / rect.width) * 2 - 1;
+        pointerNDC.y = -((cy - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointerNDC, camera);
+        var hitBoxes = holes.map(function (h) { return h.hitBox; });
+        var hits = raycaster.intersectObjects(hitBoxes, false);
+        if (hits.length) onHit(hits[0].object.userData.holeIdx);
       }
-      raf = requestAnimationFrame(loop);
-    });
+      renderer.domElement.addEventListener('click', onCanvasClick);
 
-    // ---- game state ----
-    var running, roundsDone, lastIdx, activeIdx, activeType;
-    var score, combo, bestCombo;
-    var scores, turn;
-    var expireTimer, spawnTimer;
+      // ---------------- particle / screen-shake fx ----------------
+      var particles = [];
+      var shakeMag = 0;
+      function burst(idx, color, n, spread) {
+        var p = holePos(idx);
+        var c = new THREE.Color(color);
+        for (var k = 0; k < n; k++) {
+          var mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 1 });
+          var mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), mat);
+          mesh.position.set(p.x, 0.5, p.z);
+          scene.add(mesh);
+          var a = Math.random() * Math.PI * 2, sp = (0.03 + Math.random() * 0.05) * (spread || 3);
+          particles.push({ mesh: mesh, vx: Math.cos(a) * sp, vy: 0.08 + Math.random() * 0.08, vz: Math.sin(a) * sp, life: 1 });
+        }
+      }
+      function shake(mag) { shakeMag = Math.max(shakeMag, mag); }
+      function stepParticles() {
+        for (var k = particles.length - 1; k >= 0; k--) {
+          var p = particles[k];
+          p.vy -= 0.01;
+          p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
+          p.life -= 0.03;
+          p.mesh.material.opacity = Math.max(0, p.life);
+          if (p.life <= 0) { scene.remove(p.mesh); csaDisposeThree(p.mesh); particles.splice(k, 1); }
+        }
+      }
 
-    function comboMultiplier(c) {
-      if (c >= 15) return 4;
-      if (c >= 10) return 3;
-      if (c >= 5) return 2;
-      return 1;
-    }
+      // ---------------- game state (identical logic to the 2D version) ----------------
+      var running, roundsDone, lastIdx, activeIdx, activeType;
+      var score, combo, bestCombo;
+      var scores, turn;
+      var expireTimer, spawnTimer, raf;
 
-    function currentUp() {
-      var d = DIFFS[diffIdx];
-      var p = Math.min(1, roundsDone / d.rounds);
-      return Math.round(d.up - (d.up - d.minUp) * p);
-    }
-    function currentGap() {
-      var d = DIFFS[diffIdx];
-      var p = Math.min(1, roundsDone / d.rounds);
-      return Math.round(d.gap - (d.gap - d.minGap) * p);
-    }
-    function pickType() {
-      if (roundsDone < 3) return "normal";
-      var r = Math.random();
-      if (r < 0.10) return "golden";
-      if (r < 0.24) return "bomb";
-      return "normal";
-    }
-    function pickHole() {
-      var idx;
-      do { idx = Math.floor(Math.random() * HOLE_COUNT); } while (idx === lastIdx && Math.random() < 0.8);
-      lastIdx = idx;
-      return idx;
-    }
+      function comboMultiplier(c) {
+        if (c >= 15) return 4;
+        if (c >= 10) return 3;
+        if (c >= 5) return 2;
+        return 1;
+      }
 
-    function renderHole(idx, type) {
-      var m = mounds[idx];
-      var hEl = holeEls[idx];
-      if (type) {
-        var glyph = type === "golden" ? "★" : type === "bomb" ? "✹" : "◆";
-        var col = type === "golden" ? R.yellow : type === "bomb" ? R.dim : R.coral;
-        m.textContent = glyph;
-        m.style.color = type === "bomb" ? R.ink : "#171233";
-        hEl.style.background = col;
-        requestAnimationFrame(function () {
-          m.style.opacity = "1";
-          m.style.transform = "translateY(0) scale(1)";
+      function currentUp() {
+        var d = DIFFS[diffIdx];
+        var p = Math.min(1, roundsDone / d.rounds);
+        return Math.round(d.up - (d.up - d.minUp) * p);
+      }
+      function currentGap() {
+        var d = DIFFS[diffIdx];
+        var p = Math.min(1, roundsDone / d.rounds);
+        return Math.round(d.gap - (d.gap - d.minGap) * p);
+      }
+      function pickType() {
+        if (roundsDone < 3) return "normal";
+        var r = Math.random();
+        if (r < 0.10) return "golden";
+        if (r < 0.24) return "bomb";
+        return "normal";
+      }
+      function pickHole() {
+        var idx;
+        do { idx = Math.floor(Math.random() * HOLE_COUNT); } while (idx === lastIdx && Math.random() < 0.8);
+        lastIdx = idx;
+        return idx;
+      }
+
+      function renderHole(idx, type) {
+        var h = holes[idx];
+        h.type = type;
+        if (type) {
+          h.mat.color.copy(TYPE_COLOR[type]);
+          h.mat.emissive.copy(TYPE_COLOR[type]).multiplyScalar(type === "bomb" ? 0.3 : 0.45);
+          h.up = true; h.t = 0;
+        } else {
+          h.up = false; h.t = 0;
+        }
+      }
+
+      function updateHud() {
+        if (mode === "1p") {
+          t.setHud(
+            "SCORE<b>" + score + "</b>" +
+            '<span style="margin-left:1rem">COMBO<b>x' + comboMultiplier(combo) + "</b></span>" +
+            '<span style="margin-left:1rem">LEFT<b>' + Math.max(0, DIFFS[diffIdx].rounds - roundsDone) + "</b></span>"
+          );
+        } else {
+          t.setHud(
+            "P1<b>" + scores[1] + "</b><span style=\"margin-left:1rem\">P2<b>" + scores[2] + "</b></span>" +
+            '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + "'s turn</span>"
+          );
+        }
+      }
+
+      function scoreDelta(amount) {
+        if (mode === "1p") {
+          score = Math.max(0, score + amount);
+        } else {
+          scores[turn] = Math.max(0, scores[turn] + amount);
+        }
+      }
+
+      function spawnHole() {
+        if (!running) return;
+        roundsDone++;
+        if (roundsDone > DIFFS[diffIdx].rounds) { endRound(); return; }
+        var idx = pickHole();
+        var type = pickType();
+        activeIdx = idx; activeType = type;
+        renderHole(idx, type);
+        updateHud();
+        expireTimer = setTimeout(function () { onExpire(idx); }, currentUp());
+      }
+
+      function onExpire(idx) {
+        if (activeIdx !== idx) return;
+        var type = activeType;
+        renderHole(idx, null);
+        activeIdx = null; activeType = null;
+        if (type === "normal" || type === "golden") combo = 0;
+        if (mode === "2p") turn = turn === 1 ? 2 : 1;
+        updateHud();
+        spawnTimer = setTimeout(spawnHole, currentGap());
+      }
+
+      function onHit(idx) {
+        if (!running || activeIdx !== idx) return;
+        clearTimeout(expireTimer);
+        var type = activeType;
+        if (type === "bomb") {
+          scoreDelta(-15);
+          combo = 0;
+          shake(10);
+          burst(idx, R.coral, 14, 4.5);
+        } else {
+          combo++;
+          if (combo > bestCombo) bestCombo = combo;
+          var base = type === "golden" ? 30 : 10;
+          var gained = base * comboMultiplier(combo);
+          scoreDelta(gained);
+          shake(type === "golden" ? 6 : 3);
+          burst(idx, type === "golden" ? R.yellow : R.teal, type === "golden" ? 18 : 10, type === "golden" ? 5 : 3);
+        }
+        renderHole(idx, null);
+        activeIdx = null; activeType = null;
+        if (mode === "2p") turn = turn === 1 ? 2 : 1;
+        updateHud();
+        spawnTimer = setTimeout(spawnHole, currentGap());
+      }
+
+      function endRound() {
+        running = false;
+        clearTimeout(expireTimer);
+        clearTimeout(spawnTimer);
+        if (mode === "1p") {
+          t.reportScore("whack", score);
+          t.showOverlay("Round over!", "Final score: " + score + " · best combo x" + comboMultiplier(bestCombo), "Play again", startGame3D_restart);
+        } else {
+          var winner = scores[1] === scores[2] ? "Draw!" : (scores[1] > scores[2] ? "Player 1 wins!" : "Player 2 wins!");
+          t.reportScore("whack", Math.max(scores[1], scores[2]));
+          t.showOverlay(winner, "P1: " + scores[1] + " · P2: " + scores[2], "Play again", startGame3D_restart);
+        }
+      }
+
+      function startGame3D_restart() {
+        clearTimeout(expireTimer);
+        clearTimeout(spawnTimer);
+        for (var i = 0; i < HOLE_COUNT; i++) renderHole(i, null);
+        score = 0; combo = 0; bestCombo = 0;
+        scores = { 1: 0, 2: 0 }; turn = 1;
+        roundsDone = 0; lastIdx = null; activeIdx = null; activeType = null;
+        running = true;
+        updateHud();
+        spawnTimer = setTimeout(spawnHole, 500);
+      }
+
+      // ---------------- options bar ----------------
+      var bar = document.createElement("div");
+      bar.className = "opt-bar";
+      stackWrap.appendChild(bar);
+      function renderOpts() {
+        bar.innerHTML =
+          '<span class="opt-group"><span class="opt-label">SPEED</span>' +
+          DIFFS.map(function (d, idx) { return '<button type="button" class="opt-btn' + (idx === diffIdx ? " active" : "") + '" data-diff="' + idx + '">' + d.name + "</button>"; }).join("") +
+          '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
+          '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
+        bar.querySelectorAll("[data-diff]").forEach(function (btn) {
+          btn.addEventListener("click", function () { diffIdx = Number(btn.getAttribute("data-diff")); renderOpts(); startGame3D_restart(); });
         });
-      } else {
-        m.style.opacity = "0";
-        m.style.transform = "translateY(40%) scale(.3)";
-        hEl.style.background = R.grid;
+        bar.querySelectorAll("[data-mode]").forEach(function (btn) {
+          btn.addEventListener("click", function () { mode = btn.getAttribute("data-mode"); renderOpts(); startGame3D_restart(); });
+        });
       }
-    }
 
-    function updateHud() {
-      if (mode === "1p") {
-        t.setHud(
-          "SCORE<b>" + score + "</b>" +
-          '<span style="margin-left:1rem">COMBO<b>x' + comboMultiplier(combo) + "</b></span>" +
-          '<span style="margin-left:1rem">LEFT<b>' + Math.max(0, DIFFS[diffIdx].rounds - roundsDone) + "</b></span>"
-        );
-      } else {
-        t.setHud(
-          "P1<b>" + scores[1] + "</b><span style=\"margin-left:1rem\">P2<b>" + scores[2] + "</b></span>" +
-          '<span style="margin-left:1rem">' + (turn === 1 ? "P1" : "P2") + "'s turn</span>"
-        );
+      // ---------------- render loop ----------------
+      function renderFrame() {
+        for (var i = 0; i < holes.length; i++) {
+          var h = holes[i];
+          if (h.t < 1) h.t = Math.min(1, h.t + 0.14);
+          var ease = h.t < 1 ? (1 - Math.pow(1 - h.t, 3)) : 1;
+          var targetY = h.up ? -0.05 : -1.15;
+          var startY = h.up ? -1.15 : -0.05;
+          h.mole.position.y = startY + (targetY - startY) * ease;
+        }
+        stepParticles();
+        if (shakeMag > 0.4) shakeMag *= 0.82; else shakeMag = 0;
+        var sx = (Math.random() - 0.5) * shakeMag * 0.03, sy = (Math.random() - 0.5) * shakeMag * 0.03;
+        camera.position.set(povBase[0] + sx, povBase[1] + sy, povBase[2]);
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
       }
-    }
-
-    function scoreDelta(amount) {
-      if (mode === "1p") {
-        score = Math.max(0, score + amount);
-      } else {
-        scores[turn] = Math.max(0, scores[turn] + amount);
+      function loop() {
+        renderFrame();
+        raf = requestAnimationFrame(loop);
       }
+
+      renderOpts();
+      startGame3D_restart();
+      raf = requestAnimationFrame(loop);
+
+      return function () {
+        running = false;
+        clearTimeout(expireTimer);
+        clearTimeout(spawnTimer);
+        cancelAnimationFrame(raf);
+        renderer.domElement.removeEventListener('click', onCanvasClick);
+        scene.traverse(csaDisposeThree);
+        renderer.dispose();
+        if (renderer.forceContextLoss) renderer.forceContextLoss();
+        if (stackWrap && stackWrap.parentNode) stackWrap.parentNode.removeChild(stackWrap);
+      };
     }
 
-    function spawnHole() {
-      if (!running) return;
-      roundsDone++;
-      if (roundsDone > DIFFS[diffIdx].rounds) { endRound(); return; }
-      var idx = pickHole();
-      var type = pickType();
-      activeIdx = idx; activeType = type;
-      renderHole(idx, type);
-      updateHud();
-      expireTimer = setTimeout(function () { onExpire(idx); }, currentUp());
-    }
-
-    function onExpire(idx) {
-      if (activeIdx !== idx) return;
-      var type = activeType;
-      renderHole(idx, null);
-      activeIdx = null; activeType = null;
-      if (type === "normal" || type === "golden") combo = 0;
-      if (mode === "2p") turn = turn === 1 ? 2 : 1;
-      updateHud();
-      spawnTimer = setTimeout(spawnHole, currentGap());
-    }
-
-    function onHit(idx) {
-      if (!running || activeIdx !== idx) return;
-      clearTimeout(expireTimer);
-      var type = activeType;
-      if (type === "bomb") {
-        scoreDelta(-15);
-        combo = 0;
-        shake(10);
-        burst(idx, R.coral, 14, 4.5);
-      } else {
-        combo++;
-        if (combo > bestCombo) bestCombo = combo;
-        var base = type === "golden" ? 30 : 10;
-        var gained = base * comboMultiplier(combo);
-        scoreDelta(gained);
-        shake(type === "golden" ? 6 : 3);
-        burst(idx, type === "golden" ? R.yellow : R.teal, type === "golden" ? 18 : 10, type === "golden" ? 5 : 3);
-      }
-      renderHole(idx, null);
-      activeIdx = null; activeType = null;
-      if (mode === "2p") turn = turn === 1 ? 2 : 1;
-      updateHud();
-      spawnTimer = setTimeout(spawnHole, currentGap());
-    }
-
-    function endRound() {
-      running = false;
-      clearTimeout(expireTimer);
-      clearTimeout(spawnTimer);
-      if (mode === "1p") {
-        t.reportScore("whack", score);
-        msg.textContent = "Round over — " + score + " pts";
-        msg.style.color = R.green;
-        t.showOverlay("Round over!", "Final score: " + score + " · best combo x" + comboMultiplier(bestCombo), "Play again", startGame);
-      } else {
-        var winner = scores[1] === scores[2] ? "Draw!" : (scores[1] > scores[2] ? "Player 1 wins!" : "Player 2 wins!");
-        t.reportScore("whack", Math.max(scores[1], scores[2]));
-        t.showOverlay(winner, "P1: " + scores[1] + " · P2: " + scores[2], "Play again", startGame);
-      }
-    }
-
-    function startGame() {
-      clearTimeout(expireTimer);
-      clearTimeout(spawnTimer);
-      for (var i = 0; i < HOLE_COUNT; i++) renderHole(i, null);
-      score = 0; combo = 0; bestCombo = 0;
-      scores = { 1: 0, 2: 0 }; turn = 1;
-      roundsDone = 0; lastIdx = null; activeIdx = null; activeType = null;
-      running = true;
-      msg.textContent = "";
-      updateHud();
-      spawnTimer = setTimeout(spawnHole, 500);
-    }
-
-    function renderOpts() {
-      bar.innerHTML =
-        '<span class="opt-group"><span class="opt-label">SPEED</span>' +
-        DIFFS.map(function (d, idx) { return '<button type="button" class="opt-btn' + (idx === diffIdx ? " active" : "") + '" data-diff="' + idx + '">' + d.name + "</button>"; }).join("") +
-        '</span><span class="opt-group"><button type="button" class="opt-btn' + (mode === "1p" ? " active" : "") + '" data-mode="1p">1 Player</button>' +
-        '<button type="button" class="opt-btn' + (mode === "2p" ? " active" : "") + '" data-mode="2p">2 Player</button></span>';
-      bar.querySelectorAll("[data-diff]").forEach(function (btn) {
-        btn.addEventListener("click", function () { diffIdx = Number(btn.getAttribute("data-diff")); renderOpts(); startGame(); });
-      });
-      bar.querySelectorAll("[data-mode]").forEach(function (btn) {
-        btn.addEventListener("click", function () { mode = btn.getAttribute("data-mode"); renderOpts(); startGame(); });
-      });
-    }
-
-    renderOpts();
-    startGame();
-
-    return function () {
-      running = false;
-      clearTimeout(expireTimer);
-      clearTimeout(spawnTimer);
-      cancelAnimationFrame(raf);
-      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
-    };
+    return csa3DLoadGate(el, t, startGame3D);
   }
-};g.simon = {
+};;g.simon = {
   title: "Signal Chain",
   tagline: "Watch the pattern, then repeat it back — one step longer each round.",
   color: R.violet,
