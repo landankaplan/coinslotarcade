@@ -14,6 +14,7 @@ hoop: ['Free Throw', '#FF9770'], penalty: ['Penalty Kick', '#3DDC97'], airhockey
 boxing: ['Reflex Boxing', '#FF6B4A'], golf: ['Mini Golf', '#2FD3C7'], derby: ['Home Run Derby', '#FFD166'], bowling: ['Lane Bowling', '#8C7CF0'],
 fieldgoal: ['Field Goal', '#4DA6FF'], darts: ['Darts', '#4DA6FF'],
 pingpong: ['Table Tennis', '#2FD3C7'],
+speedpong: ['Speed Pong', '#FFD166'], trickshot: ['Trick Shot Ping Pong', '#8C7CF0'],
 triviaSports: ['Sports Trivia', '#FF9770'], triviaMovies: ['Movie Trivia', '#FF5DA2'], triviaScience: ['Science Trivia', '#4DA6FF'],
 triviaMusic: ['Music Trivia', '#8C7CF0'], triviaHistory: ['History Trivia', '#3DDC97'], triviaGeography: ['Geography Trivia', '#4DA6FF'],
 triviaGaming: ['Video Game Trivia', '#FF5DA2'], triviaFood: ['Food & Drink Trivia', '#FF9770'], triviaAnimals: ['Animal Trivia', '#3DDC97'],

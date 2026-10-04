@@ -54,8 +54,8 @@ node patch.js
 # --- how-to-play data: one blurb + full instructions per game, checksum hard gate
 # (generated once and verified, so an exact match is expected) ---
 HOWTO_SUM=$(md5sum howto.js | awk '{print $1}')
-if [ "$HOWTO_SUM" != "25cb6f32f6eaad38e5215762c44b06ad" ]; then
-  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected 25cb6f32f6eaad38e5215762c44b06ad"
+if [ "$HOWTO_SUM" != "9a0ffa2a8d137461f62e696abe10e475" ]; then
+  echo "HOWTO DATA CHECKSUM MISMATCH: got $HOWTO_SUM expected 9a0ffa2a8d137461f62e696abe10e475"
   exit 1
 fi
 node --check howto.js
