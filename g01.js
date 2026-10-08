@@ -9,9 +9,98 @@ a.frame=function(r){a.run=r,a.last=0,a.rid||a.dead||(a.rid=requestAnimationFrame
 }),a.on(t,'pointercancel',function(t){n=!1,r.up&&r.up(a.pt(t),t)})},a.swipe=function(t){var n=r.D(a.cv,t);a.fns.push(n)},a.hud=function(r){var t=r.map(function(r,t){var n=r[0]+'<b>'+r[1]+'</b>';return t?'<span style=margin-left:1rem>'+n+'</span>':n}).join('');t!==a.lh&&(a.lh=t,o.setHud(t))},a.hint=function(r){o.setHint(r)},a.begin=function(r){a.again=r,o.hideOverlay(),r()},a.over=function(r,n,e){a.run=null,r=Math.floor(r),o.reportScore(t,r),o.showOverlay(e||'Game Over',(n||'Score: '+r)+' · Best '+o.getHighScore(t),'Play again',a.again)},a.burst=function(r,t,n,o){var i,l,f;for(i=0;i<(o||10);i++)l=c(0,e),f=c(30,150),a.fx.push({x:r,y:t,vx:Math.cos(l)*f,vy:Math.sin(l)*f,t:c(.3,.7),m:.7,c:n})},a.fxStep=function(r){var t=a.c;a.fx=a.fx.filter(function(n){return n.t-=r,n.x+=n.vx*r,n.y+=n.vy*r,!(n.t<=0||(t.globalAlpha=s(n.t/n.m,0,1),t.fillStyle=n.c,t.fillRect(n.x-1.5,n.y-1.5,3,3),t.globalAlpha=1,0))})},a.opt=function(r,t,n,o){
 var e=document.getElementById('optionsBar'),a=document.createElement('span'),i=document.createElement('span'),l=[];a.className='opt-group',i.className='opt-label',i.textContent=r,a.appendChild(i),t.forEach(function(r,t){var e=document.createElement('button');e.type='button',e.className='opt-btn'+(t===n?' active':''),e.textContent=r,e.onclick=function(){l.forEach(function(r,n){r.className='opt-btn'+(n===t?' active':'')}),o(t)},l.push(e),a.appendChild(e)}),e.appendChild(a)},a.pad=function(r){('ontouchstart'in window||navigator.maxTouchPoints>0)&&(o.setTouchPad(r.map(function(r){return'<button type=button class=pad-btn data-k='+r[1]+'>'+r[0]+'</button>'}).join('')),[].forEach.call(document.getElementById('touchPad').querySelectorAll('button'),function(r){var t=r.getAttribute('data-k');'Space'===t&&(t=' '),a.on(r,'pointerdown',function(r){r.preventDefault(),a.k[t]||(a.k[t]=1,a.press&&a.press(t,r))});var n=function(){delete a.k[t]};a.on(r,'pointerup',n),a.on(r,'pointerleave',n),
 a.on(r,'pointercancel',n)}))},a.dispose=function(){a.dead=!0,a.rid&&cancelAnimationFrame(a.rid),a.fns.forEach(function(r){r()})},a}(o,t,n);return p(a),function(){a.dispose()}}},n.push(o),a.push(o)}var b='Arcade Classics',m='Reflex',M='Puzzle',k='Board & Strategy',S='Cards & Words';w('orbitRaiders',b,'Orbit Raiders',o.blue,'Hold the line against wave after wave of raiders — chain kills for a rising multiplier.','Arrows / A D to move · hold Space to fire',function(a){
-var ctx=a.canvas(400,460),W=400,H=460;
+function startGame3D(){
+var W=400,H=460;
 var COLORS=[o.magenta,o.orange,o.yellow,o.green];
 var px,bullet,enemies,formX,formDir,dropBoost,shots,shields,lives,score,wave,ufo,fireCd,spawnCd,ufoCd,diveCd,hitInv,combo,comboTimer;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+a.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/460;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){a.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(400,460);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x090417,1);
+canvasWrap.appendChild(renderer3d.domElement);
+a.cv=renderer3d.domElement;a.w=W;a.h=H;
+
+var WH2=10*(H/W);
+function mapX3d(px2){return px2/W*20-10}
+function mapY3d(py){return WH2-py/H*(2*WH2)}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x090417,24,52);
+var camera3d=new THREE.PerspectiveCamera(55,W/H,0.1,200);
+camera3d.position.set(0,0,29);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.85));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+sun3d.position.set(6,14,14);
+scene3d.add(sun3d);
+
+var starGeo3d=new THREE.BufferGeometry();
+var starPos3d=[];
+for(var si3=0;si3<140;si3++){starPos3d.push((Math.random()*2-1)*13,(Math.random()*2-1)*13,-8-Math.random()*12)}
+starGeo3d.setAttribute('position',new THREE.Float32BufferAttribute(starPos3d,3));
+scene3d.add(new THREE.Points(starGeo3d,new THREE.PointsMaterial({color:0xe9fbf9,size:0.07,transparent:true,opacity:0.7})));
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c=grp.children.pop();
+    grp.remove(c);
+    extDisposeThree(c)
+  }
+}
+var enemyGroup3d=new THREE.Group();scene3d.add(enemyGroup3d);
+var shieldGroup3d=new THREE.Group();scene3d.add(shieldGroup3d);
+var shotGroup3d=new THREE.Group();scene3d.add(shotGroup3d);
+var enemyMatsByRow=COLORS.map(function(col){return new THREE.MeshStandardMaterial({color:new THREE.Color(col),emissive:new THREE.Color(col),emissiveIntensity:0.3,roughness:0.5})});
+var shieldMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),roughness:0.7});
+var bulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+var enemyShotMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.coral)});
+var ufoMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.violet),emissive:new THREE.Color(o.violet),emissiveIntensity:0.4,roughness:0.5});
+var ufoMesh3d=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,0.6),ufoMat3d);
+ufoMesh3d.visible=false;
+scene3d.add(ufoMesh3d);
+
+var shipGroup3d=new THREE.Group();
+var shipMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.blue),emissive:new THREE.Color(o.blue),emissiveIntensity:0.35,roughness:0.5});
+var shipBody3d=new THREE.Mesh(new THREE.ConeGeometry(0.9,1.4,4),shipMat3d);
+shipBody3d.rotation.x=Math.PI/2;
+shipBody3d.rotation.y=Math.PI/4;
+shipGroup3d.add(shipBody3d);
+var shipBase3d=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.3,0.6),shipMat3d);
+shipBase3d.position.y=-0.7;
+shipGroup3d.add(shipBase3d);
+scene3d.add(shipGroup3d);
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wy,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+    mesh.position.set(wx,wy,0.3);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
 
 function rectHit(pt,hw,hh,x2,y2){return Math.abs(pt.x-x2)<hw&&Math.abs(pt.y-y2)<hh}
 function shieldHit(pt,r){for(var i=0;i<shields.length;i++)if(Math.abs(pt.x-shields[i].x-3)<r&&Math.abs(pt.y-shields[i].y-3)<6)return shields.splice(i,1),!0;return!1}
@@ -61,13 +150,13 @@ function step(dt){
   if(bullet){
     bullet.y-=480*dt;
     if(bullet.y<0||shieldHit(bullet,5))bullet=null;
-    else if(ufo&&rectHit(bullet,18,10,ufo.x,ufo.y)){score+=100+50*f(3);combo++;comboTimer=2.5;a.burst(ufo.x,ufo.y,o.violet,16);ufo=null;bullet=null}
+    else if(ufo&&rectHit(bullet,18,10,ufo.x,ufo.y)){score+=100+50*f(3);combo++;comboTimer=2.5;spawnParticles3d(mapX3d(ufo.x),mapY3d(ufo.y),o.violet,16);ufo=null;bullet=null}
     else for(var i=0;i<enemies.length;i++){
       var e=enemies[i],ex=e.diving?e.curX:e.x+formX,ey=e.diving?e.curY:e.y+dropBoost;
       if(rectHit(bullet,13,10,ex,ey)){
         var mult=1+Math.min(4,Math.floor(combo/5));
         score+=10*(4-e.r)*mult;combo++;comboTimer=2.5;
-        a.burst(ex,ey,COLORS[e.r],10);
+        spawnParticles3d(mapX3d(ex),mapY3d(ey),COLORS[e.r],10);
         enemies.splice(i,1);bullet=null;break
       }
     }
@@ -81,50 +170,74 @@ function step(dt){
     if(sh.vx){sh.x+=sh.vx*dt;sh.y+=sh.vy*dt}else sh.y+=(150+12*wave)*dt;
     if(sh.y>H||shieldHit(sh,4))shots.splice(j,1);
     else if(hitInv<=0&&rectHit(sh,14,10,px,426)){
-      shots.splice(j,1);lives--;hitInv=1.5;combo=0;a.burst(px,426,o.blue,24);
-      if(lives<=0){draw(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
+      shots.splice(j,1);lives--;hitInv=1.5;combo=0;spawnParticles3d(mapX3d(px),mapY3d(426),o.blue,24);
+      if(lives<=0){render3d(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
     }
   }
   for(var k2=0;k2<enemies.length;k2++){
     var e2=enemies[k2],ey2=e2.diving?e2.curY:e2.y+dropBoost;
-    if(!e2.diving&&ey2>350){draw(dt);a.over(score,'They landed on wave '+wave+' · Score: '+score);return}
+    if(!e2.diving&&ey2>350){render3d(dt);a.over(score,'They landed on wave '+wave+' · Score: '+score);return}
   }
   if(!enemies.length){wave++;score+=100+20*wave;buildWave()}
-  draw(dt)
+  render3d(dt)
 }
 
-function draw(dt){
-  g(ctx,W,H);
+function render3d(dt){
+  disposeGroupChildren(enemyGroup3d);
   var jitter=Math.floor(formX/9)%2?1:0;
   enemies.forEach(function(e){
     var ex=e.diving?e.curX:e.x+formX,ey=e.diving?e.curY:e.y+dropBoost;
-    p(ctx,ex-13,ey-9,26,15,7,COLORS[e.r]);
-    p(ctx,ex-9+4*jitter,ey+5,5,6,2,COLORS[e.r]);
-    p(ctx,ex+4-4*jitter,ey+5,5,6,2,COLORS[e.r]);
-    d(ctx,ex-5,ey-3,3,o.bg);d(ctx,ex+5,ey-3,3,o.bg)
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.75,0.5),enemyMatsByRow[e.r]);
+    mesh.position.set(mapX3d(ex),mapY3d(ey),0);
+    mesh.rotation.z=jitter?0.08:-0.08;
+    enemyGroup3d.add(mesh)
   });
-  ctx.fillStyle=o.teal;
-  shields.forEach(function(sh){ctx.fillRect(sh.x,sh.y,5,5)});
-  if(ufo){p(ctx,ufo.x-16,ufo.y-5,32,10,5,o.violet);p(ctx,ufo.x-8,ufo.y-11,16,8,4,o.ink)}
-  ctx.fillStyle=o.coral;
-  shots.forEach(function(sh){ctx.fillRect(sh.x-2,sh.y-6,4,12)});
-  if(bullet){ctx.fillStyle=o.ink;ctx.fillRect(bullet.x-2,bullet.y-8,4,14)}
-  if(hitInv<=0||Math.floor(10*hitInv)%2){
-    ctx.fillStyle=o.blue;ctx.beginPath();ctx.moveTo(px,408);ctx.lineTo(px-18,436);ctx.lineTo(px+18,436);ctx.closePath();ctx.fill();
-    p(ctx,px-22,432,44,8,3,o.ink)
+
+  disposeGroupChildren(shieldGroup3d);
+  shields.forEach(function(sh){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.27,0.27),shieldMat3d);
+    mesh.position.set(mapX3d(sh.x+2.5),mapY3d(sh.y+2.5),0);
+    shieldGroup3d.add(mesh)
+  });
+
+  ufoMesh3d.visible=!!ufo;
+  if(ufo)ufoMesh3d.position.set(mapX3d(ufo.x),mapY3d(ufo.y),0);
+
+  disposeGroupChildren(shotGroup3d);
+  shots.forEach(function(sh){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.6,0.2),enemyShotMat3d);
+    mesh.position.set(mapX3d(sh.x),mapY3d(sh.y),0);
+    shotGroup3d.add(mesh)
+  });
+  if(bullet){
+    var bmesh=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.7,0.2),bulletMat3d);
+    bmesh.position.set(mapX3d(bullet.x),mapY3d(bullet.y),0);
+    shotGroup3d.add(bmesh)
   }
-  a.fxStep(dt);
-  for(var i2=0;i2<lives;i2++)p(ctx,10+18*i2,446,12,8,3,o.blue);
+
+  var blink=hitInv<=0||Math.floor(10*hitInv)%2;
+  shipGroup3d.visible=!!blink;
+  if(blink)shipGroup3d.position.set(mapX3d(px),mapY3d(422),0);
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
   a.hud([['SCORE',y(score)],['WAVE',wave],['LIVES',lives],['COMBO','x'+(1+Math.min(4,Math.floor(combo/5)))]])
 }
 
 a.pad([['◀','ArrowLeft'],['FIRE','Space'],['▶','ArrowRight']]);
+a.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 a.begin(function(){
   px=200;lives=3;score=0;wave=1;ufo=null;fireCd=0;spawnCd=1;ufoCd=15;hitInv=0;combo=0;comboTimer=0;
-  a.fx=[];
   buildWave();
   a.frame(step)
 })
+}
+ext3DLoadGate(a.el,startGame3D)
 }),w('rockDrift',b,'Rock Drift',o.orange,'Drift, spin and blast the asteroid field — watch for the UFO raiders that shoot back.','Left/Right turn · Up thrust · Space fire',function(a){
 function startGame3D(){
 var W=400,H=400;

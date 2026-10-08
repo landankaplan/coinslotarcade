@@ -277,165 +277,307 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     r.frame(step);
   });
 }),w('botSwarm',b,'Bot Swarm',o.coral,'Move with one hand, blast with the other, dodge turret fire and rescue stranded humans.','WASD / arrows move · I J K L (or click and hold) to shoot',function(r){
-  var W=400, HH=400, ctx=r.canvas(W,HH);
-  var player, bullets, chasers, orbiters, spinners, humans, turrets, enemyBullets;
-  var score, lives, wave, hitInvuln, aimTarget, timeAcc, fireCd, comboMult, comboTimer, nextExtraLife;
+function startGame3D(){
+var W=400, HH=400;
+var player, bullets, chasers, orbiters, spinners, humans, turrets, enemyBullets;
+var score, lives, wave, hitInvuln, aimTarget, timeAcc, fireCd, comboMult, comboTimer, nextExtraLife;
 
-  function randomSpot(minDist){
-    var x2,y2,tries=0;
-    do { x2=c(20,380); y2=c(20,380); tries++; } while(Math.hypot(x2-player.x,y2-player.y)<minDist && tries<40);
-    return {x:x2,y:y2};
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+r.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:1/1;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(400,400);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x05030c,1);
+canvasWrap.appendChild(renderer3d.domElement);
+r.cv=renderer3d.domElement;r.w=W;r.h=HH;
+
+function mapX3d(px2){return px2/W*20-10}
+function mapZ3d(py){return py/HH*20-10}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x05030c,22,46);
+var camera3d=new THREE.PerspectiveCamera(48,1,0.1,200);
+camera3d.position.set(0,17,12.5);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.75));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+sun3d.position.set(8,20,8);
+scene3d.add(sun3d);
+
+var floor3d=new THREE.Mesh(new THREE.PlaneGeometry(21,21),new THREE.MeshStandardMaterial({color:0x0e0a1f,roughness:0.95}));
+floor3d.rotation.x=-Math.PI/2;
+scene3d.add(floor3d);
+var borderMat3d=new THREE.LineBasicMaterial({color:new THREE.Color(o.violet)});
+var borderPts3d=[[-10,-10],[10,-10],[10,10],[-10,10],[-10,-10]].map(function(p2){return new THREE.Vector3(p2[0],0.02,p2[1])});
+scene3d.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(borderPts3d),borderMat3d));
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c=grp.children.pop();
+    grp.remove(c);
+    extDisposeThree(c)
+  }
+}
+var chaserGroup3d=new THREE.Group();scene3d.add(chaserGroup3d);
+var spinnerGroup3d=new THREE.Group();scene3d.add(spinnerGroup3d);
+var turretGroup3d=new THREE.Group();scene3d.add(turretGroup3d);
+var humanGroup3d=new THREE.Group();scene3d.add(humanGroup3d);
+var orbiterGroup3d=new THREE.Group();scene3d.add(orbiterGroup3d);
+var bulletGroup3d=new THREE.Group();scene3d.add(bulletGroup3d);
+var enemyBulletGroup3d=new THREE.Group();scene3d.add(enemyBulletGroup3d);
+
+var chaserMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.coral),emissive:new THREE.Color(o.coral),emissiveIntensity:0.3,roughness:0.5});
+var spinnerMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.yellow)});
+var turretMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.magenta),emissive:new THREE.Color(o.magenta),emissiveIntensity:0.3,roughness:0.5});
+var humanMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.green),emissive:new THREE.Color(o.green),emissiveIntensity:0.3,roughness:0.5});
+var orbiterMat3d=new THREE.MeshStandardMaterial({color:0x9aa4b8,roughness:0.6});
+var bulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+var enemyBulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.magenta)});
+
+var playerGroup3d=new THREE.Group();
+var playerMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.blue),emissive:new THREE.Color(o.blue),emissiveIntensity:0.4,roughness:0.5});
+var pHead3d=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),playerMat3d);
+pHead3d.position.y=0.55;
+playerGroup3d.add(pHead3d);
+var pBody3d=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.5,0.3),playerMat3d);
+pBody3d.position.y=0.25;
+playerGroup3d.add(pBody3d);
+scene3d.add(playerGroup3d);
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wz,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,6),mat);
+    mesh.position.set(wx,0.3,wz);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.04+Math.random()*0.15;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vz:Math.sin(ang)*sp,vy:0.05+Math.random()*0.09,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.vy-=0.011;
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
+function randomSpot(minDist){
+  var x2,y2,tries=0;
+  do { x2=c(20,380); y2=c(20,380); tries++; } while(Math.hypot(x2-player.x,y2-player.y)<minDist && tries<40);
+  return {x:x2,y:y2};
+}
+
+function newWave(){
+  var i, spot;
+  bullets=[]; chasers=[]; orbiters=[]; spinners=[]; humans=[]; turrets=[]; enemyBullets=[];
+  for(i=0;i<8+3*wave;i++){ spot=randomSpot(130); chasers.push({x:spot.x,y:spot.y,s:42+3*wave+c(0,12)}); }
+  for(i=0;i<Math.floor((wave+1)/2);i++){ spot=randomSpot(140); orbiters.push({x:spot.x,y:spot.y,a:c(0,e)}); }
+  for(i=0;i<3+wave;i++){ spot=randomSpot(90); spinners.push({x:spot.x,y:spot.y}); }
+  for(i=0;i<3;i++){ spot=randomSpot(60); humans.push({x:spot.x,y:spot.y,a:c(0,e),t:0}); }
+  for(i=0;i<Math.floor(wave/3);i++){ spot=randomSpot(150); turrets.push({x:spot.x,y:spot.y,cd:c(1,2.4)}); }
+}
+
+function checkExtraLife(){
+  if(score >= nextExtraLife){ lives++; nextExtraLife += 8000; }
+}
+
+function addScore(amount){
+  score += amount*comboMult;
+  comboMult = Math.min(6, comboMult+1);
+  comboTimer = 2;
+  checkExtraLife();
+}
+
+function step(dt){
+  var moveX=r.ax(), moveY=r.ay(), aimX=0, aimY=0, dist, i, j, bullet, killed, pos;
+  timeAcc += dt; hitInvuln -= dt; fireCd -= dt; comboTimer -= dt;
+  if(comboTimer<=0) comboMult = 1;
+
+  player.x = s(player.x + 170*moveX*dt*(moveX&&moveY?0.72:1), 8, 392);
+  player.y = s(player.y + 170*moveY*dt*(moveX&&moveY?0.72:1), 8, 392);
+
+  if(r.k.i) aimY -= 1;
+  if(r.k.k) aimY += 1;
+  if(r.k.j) aimX -= 1;
+  if(r.k.l) aimX += 1;
+  if(aimTarget){ dist = Math.hypot(aimTarget.x-player.x, aimTarget.y-player.y)||1; aimX=(aimTarget.x-player.x)/dist; aimY=(aimTarget.y-player.y)/dist; }
+  if((aimX||aimY) && fireCd<=0){
+    dist = Math.hypot(aimX,aimY);
+    bullets.push({x:player.x, y:player.y, vx:aimX/dist*520, vy:aimY/dist*520, t:0.9});
+    fireCd = 0.11;
   }
 
-  function newWave(){
-    var i, spot;
-    bullets=[]; chasers=[]; orbiters=[]; spinners=[]; humans=[]; turrets=[]; enemyBullets=[];
-    for(i=0;i<8+3*wave;i++){ spot=randomSpot(130); chasers.push({x:spot.x,y:spot.y,s:42+3*wave+c(0,12)}); }
-    for(i=0;i<Math.floor((wave+1)/2);i++){ spot=randomSpot(140); orbiters.push({x:spot.x,y:spot.y,a:c(0,e)}); }
-    for(i=0;i<3+wave;i++){ spot=randomSpot(90); spinners.push({x:spot.x,y:spot.y}); }
-    for(i=0;i<3;i++){ spot=randomSpot(60); humans.push({x:spot.x,y:spot.y,a:c(0,e),t:0}); }
-    for(i=0;i<Math.floor(wave/3);i++){ spot=randomSpot(150); turrets.push({x:spot.x,y:spot.y,cd:c(1,2.4)}); }
+  for(i=bullets.length-1;i>=0;i--){
+    bullet = bullets[i];
+    bullet.x += bullet.vx*dt; bullet.y += bullet.vy*dt; bullet.t -= dt;
+    if(bullet.t<=0 || bullet.x<0 || bullet.x>W || bullet.y<0 || bullet.y>HH) bullets.splice(i,1);
+  }
+  for(i=enemyBullets.length-1;i>=0;i--){
+    bullet = enemyBullets[i];
+    bullet.x += bullet.vx*dt; bullet.y += bullet.vy*dt; bullet.t -= dt;
+    if(bullet.t<=0 || bullet.x<0 || bullet.x>W || bullet.y<0 || bullet.y>HH) enemyBullets.splice(i,1);
   }
 
-  function checkExtraLife(){
-    if(score >= nextExtraLife){ lives++; nextExtraLife += 8000; }
-  }
-
-  function addScore(amount){
-    score += amount*comboMult;
-    comboMult = Math.min(6, comboMult+1);
-    comboTimer = 2;
-    checkExtraLife();
-  }
-
-  function step(dt){
-    var moveX=r.ax(), moveY=r.ay(), aimX=0, aimY=0, dist, i, j, bullet, killed, pos;
-    timeAcc += dt; hitInvuln -= dt; fireCd -= dt; comboTimer -= dt;
-    if(comboTimer<=0) comboMult = 1;
-
-    player.x = s(player.x + 170*moveX*dt*(moveX&&moveY?0.72:1), 8, 392);
-    player.y = s(player.y + 170*moveY*dt*(moveX&&moveY?0.72:1), 8, 392);
-
-    if(r.k.i) aimY -= 1;
-    if(r.k.k) aimY += 1;
-    if(r.k.j) aimX -= 1;
-    if(r.k.l) aimX += 1;
-    if(aimTarget){ dist = Math.hypot(aimTarget.x-player.x, aimTarget.y-player.y)||1; aimX=(aimTarget.x-player.x)/dist; aimY=(aimTarget.y-player.y)/dist; }
-    if((aimX||aimY) && fireCd<=0){
-      dist = Math.hypot(aimX,aimY);
-      bullets.push({x:player.x, y:player.y, vx:aimX/dist*520, vy:aimY/dist*520, t:0.9});
-      fireCd = 0.11;
-    }
-
-    for(i=bullets.length-1;i>=0;i--){
-      bullet = bullets[i];
-      bullet.x += bullet.vx*dt; bullet.y += bullet.vy*dt; bullet.t -= dt;
-      if(bullet.t<=0 || bullet.x<0 || bullet.x>W || bullet.y<0 || bullet.y>HH) bullets.splice(i,1);
-    }
-    for(i=enemyBullets.length-1;i>=0;i--){
-      bullet = enemyBullets[i];
-      bullet.x += bullet.vx*dt; bullet.y += bullet.vy*dt; bullet.t -= dt;
-      if(bullet.t<=0 || bullet.x<0 || bullet.x>W || bullet.y<0 || bullet.y>HH) enemyBullets.splice(i,1);
-    }
-
-    chasers.forEach(function(ch){
-      var v = Math.hypot(player.x-ch.x, player.y-ch.y)||1;
-      ch.x += (player.x-ch.x)/v*ch.s*dt + 8*Math.sin(3*timeAcc+ch.s)*dt;
-      ch.y += (player.y-ch.y)/v*ch.s*dt;
-    });
-    orbiters.forEach(function(ob){
-      if(Math.random()<1.2*dt) ob.a += c(-1.2,1.2);
-      if(Math.random()<0.5*dt) ob.a = Math.atan2(player.y-ob.y, player.x-ob.x);
-      ob.x += 34*Math.cos(ob.a)*dt; ob.y += 34*Math.sin(ob.a)*dt;
-      if(ob.x<12 || ob.x>388){ ob.a = Math.PI-ob.a; ob.x = s(ob.x,12,388); }
-      if(ob.y<12 || ob.y>388){ ob.a = -ob.a; ob.y = s(ob.y,12,388); }
-    });
-    humans.forEach(function(hu){
-      hu.t -= dt;
-      if(hu.t<=0){ hu.a += c(-1.5,1.5); hu.t = c(0.4,1.2); }
-      hu.x += 30*Math.cos(hu.a)*dt; hu.y += 30*Math.sin(hu.a)*dt;
-      if(hu.x<8 || hu.x>392){ hu.a = Math.PI-hu.a; hu.x = s(hu.x,8,392); }
-      if(hu.y<8 || hu.y>392){ hu.a = -hu.a; hu.y = s(hu.y,8,392); }
-    });
-    turrets.forEach(function(tu){
-      tu.cd -= dt;
-      if(tu.cd<=0){
-        var v2 = Math.hypot(player.x-tu.x, player.y-tu.y)||1;
-        enemyBullets.push({x:tu.x, y:tu.y, vx:(player.x-tu.x)/v2*180, vy:(player.y-tu.y)/v2*180, t:2.5});
-        tu.cd = c(1.8,3.2);
-      }
-    });
-
-    for(i=bullets.length-1;i>=0;i--){
-      bullet = bullets[i]; killed = false;
-      for(j=0;j<chasers.length;j++) if(Math.hypot(chasers[j].x-bullet.x, chasers[j].y-bullet.y)<10){ addScore(100); r.burst(chasers[j].x,chasers[j].y,o.coral,8); chasers.splice(j,1); killed=true; break; }
-      if(!killed) for(j=0;j<spinners.length;j++) if(Math.hypot(spinners[j].x-bullet.x, spinners[j].y-bullet.y)<10){ addScore(50); r.burst(spinners[j].x,spinners[j].y,o.yellow,8); spinners.splice(j,1); killed=true; break; }
-      if(!killed) for(j=0;j<turrets.length;j++) if(Math.hypot(turrets[j].x-bullet.x, turrets[j].y-bullet.y)<12){ addScore(150); r.burst(turrets[j].x,turrets[j].y,o.magenta,12); turrets.splice(j,1); killed=true; break; }
-      if(!killed) for(j=0;j<orbiters.length;j++) if(Math.hypot(orbiters[j].x-bullet.x, orbiters[j].y-bullet.y)<14){ orbiters[j].x += 0.02*bullet.vx; orbiters[j].y += 0.02*bullet.vy; killed=true; break; }
-      if(killed) bullets.splice(i,1);
-    }
-
-    for(i=humans.length-1;i>=0;i--){
-      if(Math.hypot(humans[i].x-player.x, humans[i].y-player.y)<14){ addScore(1000); r.burst(humans[i].x, humans[i].y, o.green, 14); humans.splice(i,1); }
-    }
-
-    if(hitInvuln<=0){
-      var hit = chasers.some(function(ch){ return Math.hypot(ch.x-player.x, ch.y-player.y)<12; })
-        || spinners.some(function(sp){ return Math.hypot(sp.x-player.x, sp.y-player.y)<11; })
-        || orbiters.some(function(ob){ return Math.hypot(ob.x-player.x, ob.y-player.y)<17; })
-        || enemyBullets.some(function(bl){ return Math.hypot(bl.x-player.x, bl.y-player.y)<10; });
-      if(hit){
-        lives--; hitInvuln = 2; comboMult = 1; comboTimer = 0;
-        r.burst(player.x, player.y, o.ink, 26);
-        player.x = 200; player.y = 200;
-        enemyBullets = [];
-        chasers.forEach(function(ch){ if(Math.hypot(ch.x-200, ch.y-200)<110){ pos = randomSpot(200); ch.x = pos.x; ch.y = pos.y; } });
-      }
-    }
-
-    if(lives<=0){ draw(dt); r.over(score, 'Wave '+wave+' · Score: '+score); return; }
-
-    if(!chasers.length){
-      addScore(500*humans.length + 200);
-      wave++; hitInvuln = 2; player.x = 200; player.y = 200;
-      newWave();
-    }
-
-    draw(dt);
-  }
-
-  function draw(dt){
-    g(ctx, W, HH);
-    ctx.strokeStyle = o.violet; ctx.lineWidth = 3; ctx.strokeRect(1.5,1.5,397,397);
-    spinners.forEach(function(sp){ v(ctx, sp.x-6, sp.y-6, sp.x+6, sp.y+6, o.yellow, 3); v(ctx, sp.x+6, sp.y-6, sp.x-6, sp.y+6, o.yellow, 3); });
-    turrets.forEach(function(tu){ p(ctx, tu.x-11, tu.y-11, 22, 22, 4, o.magenta); d(ctx, tu.x, tu.y, 6, o.ink); });
-    humans.forEach(function(hu){ d(ctx, hu.x, hu.y-5, 3.5, o.green); p(ctx, hu.x-3, hu.y-1, 6, 8, 2, o.green); });
-    orbiters.forEach(function(ob){ p(ctx, ob.x-13, ob.y-13, 26, 26, 4, '#9aa4b8'); p(ctx, ob.x-8, ob.y-8, 16, 16, 3, '#68718a'); });
-    chasers.forEach(function(ch){ p(ctx, ch.x-8, ch.y-8, 16, 16, 3, o.coral); p(ctx, ch.x-4, ch.y-3, 3, 3, 0, o.bg); p(ctx, ch.x+1, ch.y-3, 3, 3, 0, o.bg); });
-    ctx.fillStyle = o.ink;
-    bullets.forEach(function(bl){ ctx.fillRect(bl.x-2, bl.y-2, 4, 4); });
-    ctx.fillStyle = o.magenta;
-    enemyBullets.forEach(function(bl){ ctx.fillRect(bl.x-2.5, bl.y-2.5, 5, 5); });
-    if(hitInvuln<=0 || Math.floor(10*hitInvuln)%2){
-      d(ctx, player.x, player.y-6, 4, o.blue);
-      p(ctx, player.x-4, player.y-2, 8, 10, 2, o.blue);
-      p(ctx, player.x-7, player.y, 3, 6, 1, o.blue);
-      p(ctx, player.x+4, player.y, 3, 6, 1, o.blue);
-    }
-    r.fxStep(dt);
-    r.hud([['SCORE',y(score)],['WAVE',wave],['LIVES',lives],['COMBO','x'+comboMult]]);
-  }
-
-  r.pointer({down:function(pt){ aimTarget = pt; }, move:function(pt,evt,down){ if(down) aimTarget = pt; }, up:function(){ aimTarget = null; }});
-  r.pad([['▲','ArrowUp'],['◀','ArrowLeft'],['▶','ArrowRight'],['▼','ArrowDown']]);
-
-  r.begin(function(){
-    player = {x:200,y:200}; lives=3; score=0; wave=1; hitInvuln=1.5; aimTarget=null; timeAcc=0; fireCd=0;
-    comboMult=1; comboTimer=0; nextExtraLife=8000;
-    r.fx = [];
-    newWave();
-    r.frame(step);
+  chasers.forEach(function(ch){
+    var v = Math.hypot(player.x-ch.x, player.y-ch.y)||1;
+    ch.x += (player.x-ch.x)/v*ch.s*dt + 8*Math.sin(3*timeAcc+ch.s)*dt;
+    ch.y += (player.y-ch.y)/v*ch.s*dt;
   });
+  orbiters.forEach(function(ob){
+    if(Math.random()<1.2*dt) ob.a += c(-1.2,1.2);
+    if(Math.random()<0.5*dt) ob.a = Math.atan2(player.y-ob.y, player.x-ob.x);
+    ob.x += 34*Math.cos(ob.a)*dt; ob.y += 34*Math.sin(ob.a)*dt;
+    if(ob.x<12 || ob.x>388){ ob.a = Math.PI-ob.a; ob.x = s(ob.x,12,388); }
+    if(ob.y<12 || ob.y>388){ ob.a = -ob.a; ob.y = s(ob.y,12,388); }
+  });
+  humans.forEach(function(hu){
+    hu.t -= dt;
+    if(hu.t<=0){ hu.a += c(-1.5,1.5); hu.t = c(0.4,1.2); }
+    hu.x += 30*Math.cos(hu.a)*dt; hu.y += 30*Math.sin(hu.a)*dt;
+    if(hu.x<8 || hu.x>392){ hu.a = Math.PI-hu.a; hu.x = s(hu.x,8,392); }
+    if(hu.y<8 || hu.y>392){ hu.a = -hu.a; hu.y = s(hu.y,8,392); }
+  });
+  turrets.forEach(function(tu){
+    tu.cd -= dt;
+    if(tu.cd<=0){
+      var v2 = Math.hypot(player.x-tu.x, player.y-tu.y)||1;
+      enemyBullets.push({x:tu.x, y:tu.y, vx:(player.x-tu.x)/v2*180, vy:(player.y-tu.y)/v2*180, t:2.5});
+      tu.cd = c(1.8,3.2);
+    }
+  });
+
+  for(i=bullets.length-1;i>=0;i--){
+    bullet = bullets[i]; killed = false;
+    for(j=0;j<chasers.length;j++) if(Math.hypot(chasers[j].x-bullet.x, chasers[j].y-bullet.y)<10){ addScore(100); spawnParticles3d(mapX3d(chasers[j].x),mapZ3d(chasers[j].y),o.coral,8); chasers.splice(j,1); killed=true; break; }
+    if(!killed) for(j=0;j<spinners.length;j++) if(Math.hypot(spinners[j].x-bullet.x, spinners[j].y-bullet.y)<10){ addScore(50); spawnParticles3d(mapX3d(spinners[j].x),mapZ3d(spinners[j].y),o.yellow,8); spinners.splice(j,1); killed=true; break; }
+    if(!killed) for(j=0;j<turrets.length;j++) if(Math.hypot(turrets[j].x-bullet.x, turrets[j].y-bullet.y)<12){ addScore(150); spawnParticles3d(mapX3d(turrets[j].x),mapZ3d(turrets[j].y),o.magenta,12); turrets.splice(j,1); killed=true; break; }
+    if(!killed) for(j=0;j<orbiters.length;j++) if(Math.hypot(orbiters[j].x-bullet.x, orbiters[j].y-bullet.y)<14){ orbiters[j].x += 0.02*bullet.vx; orbiters[j].y += 0.02*bullet.vy; killed=true; break; }
+    if(killed) bullets.splice(i,1);
+  }
+
+  for(i=humans.length-1;i>=0;i--){
+    if(Math.hypot(humans[i].x-player.x, humans[i].y-player.y)<14){ addScore(1000); spawnParticles3d(mapX3d(humans[i].x),mapZ3d(humans[i].y),o.green,14); humans.splice(i,1); }
+  }
+
+  if(hitInvuln<=0){
+    var hit = chasers.some(function(ch){ return Math.hypot(ch.x-player.x, ch.y-player.y)<12; })
+      || spinners.some(function(sp){ return Math.hypot(sp.x-player.x, sp.y-player.y)<11; })
+      || orbiters.some(function(ob){ return Math.hypot(ob.x-player.x, ob.y-player.y)<17; })
+      || enemyBullets.some(function(bl){ return Math.hypot(bl.x-player.x, bl.y-player.y)<10; });
+    if(hit){
+      lives--; hitInvuln = 2; comboMult = 1; comboTimer = 0;
+      spawnParticles3d(mapX3d(player.x),mapZ3d(player.y),o.ink,26);
+      player.x = 200; player.y = 200;
+      enemyBullets = [];
+      chasers.forEach(function(ch){ if(Math.hypot(ch.x-200, ch.y-200)<110){ pos = randomSpot(200); ch.x = pos.x; ch.y = pos.y; } });
+    }
+  }
+
+  if(lives<=0){ render3d(dt); r.over(score, 'Wave '+wave+' · Score: '+score); return; }
+
+  if(!chasers.length){
+    addScore(500*humans.length + 200);
+    wave++; hitInvuln = 2; player.x = 200; player.y = 200;
+    newWave();
+  }
+
+  render3d(dt);
+}
+
+function render3d(dt){
+  disposeGroupChildren(chaserGroup3d);
+  chasers.forEach(function(ch){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.6,0.75),chaserMat3d);
+    mesh.position.set(mapX3d(ch.x),0.3,mapZ3d(ch.y));
+    chaserGroup3d.add(mesh)
+  });
+
+  disposeGroupChildren(spinnerGroup3d);
+  spinners.forEach(function(sp){
+    var grp=new THREE.Group();
+    var b1=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.08,0.08),spinnerMat3d);
+    b1.rotation.y=Math.PI/4;
+    var b2m=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.08,0.08),spinnerMat3d);
+    b2m.rotation.y=-Math.PI/4;
+    grp.add(b1);grp.add(b2m);
+    grp.position.set(mapX3d(sp.x),0.3,mapZ3d(sp.y));
+    spinnerGroup3d.add(grp)
+  });
+
+  disposeGroupChildren(turretGroup3d);
+  turrets.forEach(function(tu){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.5,1.0),turretMat3d);
+    mesh.position.set(mapX3d(tu.x),0.25,mapZ3d(tu.y));
+    turretGroup3d.add(mesh)
+  });
+
+  disposeGroupChildren(humanGroup3d);
+  humans.forEach(function(hu){
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),humanMat3d);
+    mesh.position.set(mapX3d(hu.x),0.35,mapZ3d(hu.y));
+    humanGroup3d.add(mesh)
+  });
+
+  disposeGroupChildren(orbiterGroup3d);
+  orbiters.forEach(function(ob){
+    var mesh=new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.35,16),orbiterMat3d);
+    mesh.position.set(mapX3d(ob.x),0.2,mapZ3d(ob.y));
+    orbiterGroup3d.add(mesh)
+  });
+
+  disposeGroupChildren(bulletGroup3d);
+  bullets.forEach(function(bl){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.18,0.18),bulletMat3d);
+    mesh.position.set(mapX3d(bl.x),0.3,mapZ3d(bl.y));
+    bulletGroup3d.add(mesh)
+  });
+
+  disposeGroupChildren(enemyBulletGroup3d);
+  enemyBullets.forEach(function(bl){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.22),enemyBulletMat3d);
+    mesh.position.set(mapX3d(bl.x),0.3,mapZ3d(bl.y));
+    enemyBulletGroup3d.add(mesh)
+  });
+
+  var blink=hitInvuln<=0||Math.floor(10*hitInvuln)%2;
+  playerGroup3d.visible=!!blink;
+  if(blink)playerGroup3d.position.set(mapX3d(player.x),0,mapZ3d(player.y));
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
+  r.hud([['SCORE',y(score)],['WAVE',wave],['LIVES',lives],['COMBO','x'+comboMult]]);
+}
+
+r.pointer({down:function(pt){ aimTarget = pt; }, move:function(pt,evt,down){ if(down) aimTarget = pt; }, up:function(){ aimTarget = null; }});
+r.pad([['▲','ArrowUp'],['◀','ArrowLeft'],['▶','ArrowRight'],['▼','ArrowDown']]);
+r.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
+
+r.begin(function(){
+  player = {x:200,y:200}; lives=3; score=0; wave=1; hitInvuln=1.5; aimTarget=null; timeAcc=0; fireCd=0;
+  comboMult=1; comboTimer=0; nextExtraLife=8000;
+  newWave();
+  r.frame(step);
+});
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('landGrab',b,'Land Grab',o.blue,'Draw lines to fence off territory, chain claims for a bonus, and keep clear of the wild sparks.','Arrows / WASD to move and draw · fence off 75% to clear the level',function(r){
   var GRID=40, CELL=10, ctx=r.canvas(400,400);
   var grid, player, trail, drawing, sparks, lives, score, level, claimedPct, moveAccum, axisLock, comboMult, comboTimer, nextExtraLife;
