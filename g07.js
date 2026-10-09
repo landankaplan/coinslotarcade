@@ -124,8 +124,107 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     r.frame(step);
   });
 }),w('craterCruiser',b,'Crater Cruiser',o.yellow,'Jump craters, shoot rocks and saucers, and grab boosts for a chained high score.','Space / Up to jump · X / Z to fire forward and up',function(r){
-  var W=400, HEIGHT=300, GROUND=232, ctx=r.canvas(W,HEIGHT);
+function startGame3D(){
+  var W=400,HEIGHT=300,GROUND=232;
   var roverY, roverVy, obstacles, bullets, saucers, bombs, pickups, dist, parallax, lives, killScore, deathFreeze, obstacleCd, fireCd, saucerCd, pickupCd, comboMult, comboTimer, rapidTimer, shield, nextExtraLife;
+
+  var wrapDiv=document.createElement('div');
+  wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+  r.el.appendChild(wrapDiv);
+  var canvasWrap=document.createElement('div');
+  canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/300;margin:0 auto';
+  wrapDiv.appendChild(canvasWrap);
+
+  var renderer3d=extMakeWebGLRenderer();
+  if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+  renderer3d.setSize(W,HEIGHT);
+  renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+  renderer3d.setClearColor(0x140c33,1);
+  canvasWrap.appendChild(renderer3d.domElement);
+  r.cv=renderer3d.domElement;r.w=W;r.h=HEIGHT;
+
+  var WH2=10*(HEIGHT/W);
+  function mapX3d(px2){return px2/W*20-10}
+  function mapY3d(py){return WH2-py/HEIGHT*(2*WH2)}
+
+  var scene3d=new THREE.Scene();
+  scene3d.fog=new THREE.Fog(0x140c33,16,34);
+  var camera3d=new THREE.PerspectiveCamera(50,W/HEIGHT,0.1,200);
+  camera3d.position.set(0,1.2,13.5);
+  camera3d.lookAt(0,0.4,0);
+
+  scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.85));
+  var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+  sun3d.position.set(6,10,10);
+  scene3d.add(sun3d);
+
+  function disposeGroupChildren(grp){
+    while(grp.children.length){
+      var c2=grp.children.pop();
+      grp.remove(c2);
+      extDisposeThree(c2)
+    }
+  }
+
+  var groundMat3d=new THREE.MeshStandardMaterial({color:0x3a2a7a,roughness:0.85});
+  var groundMesh3d=new THREE.Mesh(new THREE.BoxGeometry(40,3.2,4),groundMat3d);
+  groundMesh3d.position.set(0,mapY3d(276)-1.6,-1.5);
+  scene3d.add(groundMesh3d);
+
+  var mountainGroup3d=new THREE.Group();scene3d.add(mountainGroup3d);
+  var mountainMat3d=new THREE.MeshStandardMaterial({color:0x20194a,roughness:0.9});
+  var MOUNTAIN_N=7;
+  for(var mi=-1;mi<MOUNTAIN_N;mi++){
+    var mesh=new THREE.Mesh(new THREE.ConeGeometry(2.6,2.4,4),mountainMat3d);
+    mesh.rotation.y=Math.PI/4;
+    mesh.position.set(mi*4.6,mapY3d(200)+0.4,-6);
+    mountainGroup3d.add(mesh);
+  }
+
+  var craterGroup3d=new THREE.Group();scene3d.add(craterGroup3d);
+  var rockMat3d=new THREE.MeshStandardMaterial({color:0x9aa4b8,roughness:0.6});
+  var craterMat3d=new THREE.MeshStandardMaterial({color:0x0d0820,roughness:0.9});
+  var bulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.yellow)});
+  var bulletGroup3d=new THREE.Group();scene3d.add(bulletGroup3d);
+  var saucerGroup3d=new THREE.Group();scene3d.add(saucerGroup3d);
+  var bombMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.coral),emissive:new THREE.Color(o.coral),emissiveIntensity:0.4,roughness:0.5});
+  var bombGroup3d=new THREE.Group();scene3d.add(bombGroup3d);
+  var pickupGroup3d=new THREE.Group();scene3d.add(pickupGroup3d);
+
+  var roverGroup3d=new THREE.Group();
+  var roverMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.yellow),emissive:new THREE.Color(o.yellow),emissiveIntensity:0.3,roughness:0.5});
+  var roverShieldMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.blue),emissive:new THREE.Color(o.blue),emissiveIntensity:0.3,roughness:0.5});
+  var roverBody3d=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.5,1.0),roverMat3d);
+  roverGroup3d.add(roverBody3d);
+  var roverCab3d=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.8),new THREE.MeshStandardMaterial({color:0x10101a}));
+  roverCab3d.position.set(0.3,0.4,0);
+  roverGroup3d.add(roverCab3d);
+  var wheelMat3d=new THREE.MeshStandardMaterial({color:0x10101a,roughness:0.7});
+  var wheelL3d=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,10),wheelMat3d);wheelL3d.position.set(-0.43,-0.33,0);roverGroup3d.add(wheelL3d);
+  var wheelR3d=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,10),wheelMat3d);wheelR3d.position.set(0.54,-0.33,0);roverGroup3d.add(wheelR3d);
+  scene3d.add(roverGroup3d);
+
+  var particleMeshes3d=[];
+  function spawnParticles3d(wx,wy,color,n){
+    var col=new THREE.Color(color);
+    for(var pi=0;pi<n;pi++){
+      var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),mat);
+      mesh.position.set(wx,wy,0.4);
+      scene3d.add(mesh);
+      var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+      particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+    }
+  }
+  function stepParticles3d(dt){
+    for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+      var pt=particleMeshes3d[i2];
+      pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+      pt.life-=0.035;
+      pt.mesh.material.opacity=Math.max(0,pt.life);
+      if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+    }
+  }
 
   function jump(){ if(roverY>=231.5) roverVy = -340; }
 
@@ -137,9 +236,9 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
 
   function hitRover(obstacle){
     if(deathFreeze>0) return;
-    if(shield>0){ shield=0; deathFreeze=0.6; r.burst(96, roverY-8, o.blue, 20); if(obstacle) obstacle.dead=1; return; }
+    if(shield>0){ shield=0; deathFreeze=0.6; spawnParticles3d(mapX3d(96), mapY3d(roverY-8), o.blue, 20); if(obstacle) obstacle.dead=1; return; }
     lives--; deathFreeze = 1.6; comboMult = 1; comboTimer = 0;
-    r.burst(96, roverY-8, o.yellow, 24);
+    spawnParticles3d(mapX3d(96), mapY3d(roverY-8), o.yellow, 24);
     if(obstacle) obstacle.dead = 1;
   }
 
@@ -180,7 +279,7 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     });
     bombs.forEach(function(bm){
       bm.x -= speed*dt; bm.vy += 300*dt; bm.y += bm.vy*dt;
-      if(bm.y>=GROUND){ bm.dead=1; obstacles.push({t:'c', x:bm.x-15, w:32}); r.burst(bm.x, GROUND, o.coral, 8); }
+      if(bm.y>=GROUND){ bm.dead=1; obstacles.push({t:'c', x:bm.x-15, w:32}); spawnParticles3d(mapX3d(bm.x), mapY3d(GROUND), o.coral, 8); }
     });
     bullets.forEach(function(bl){ bl.x += bl.vx*dt - speed*dt*(bl.vx<100?1:0); bl.y += bl.vy*dt; if(bl.x>410 || bl.y<-10) bl.dead=1; });
     pickups.forEach(function(pk){ pk.x -= speed*dt; });
@@ -190,13 +289,13 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
       if(bullet.dead) continue;
       for(j=0;j<obstacles.length;j++){
         obs = obstacles[j];
-        if(!bullet.dead && obs.t==='r' && !obs.dead && Math.abs(bullet.x-obs.x-9)<12 && bullet.y>208){ obs.dead=1; bullet.dead=1; addKillScore(50); r.burst(obs.x+9,224,o.orange,10); }
+        if(!bullet.dead && obs.t==='r' && !obs.dead && Math.abs(bullet.x-obs.x-9)<12 && bullet.y>208){ obs.dead=1; bullet.dead=1; addKillScore(50); spawnParticles3d(mapX3d(obs.x+9),mapY3d(224),o.orange,10); }
       }
       for(j=0;j<saucers.length;j++){
         saucer = saucers[j];
         if(!bullet.dead && !saucer.dead && Math.abs(bullet.x-saucer.x)<18 && Math.abs(bullet.y-saucer.y)<12){
           bullet.dead = 1; saucer.hp--;
-          r.burst(saucer.x, saucer.y, o.violet, saucer.hp<=0?16:6);
+          spawnParticles3d(mapX3d(saucer.x),mapY3d(saucer.y),o.violet,saucer.hp<=0?16:6);
           if(saucer.hp<=0){ saucer.dead=1; addKillScore(100); }
         }
       }
@@ -211,8 +310,8 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     for(i=pickups.length-1;i>=0;i--){
       pick = pickups[i];
       if(Math.abs(pick.x-96)<18 && Math.abs(pick.y-roverY)<50){
-        if(pick.kind==='shield'){ shield=1; r.burst(pick.x,pick.y,o.blue,14); }
-        else { rapidTimer=4; addKillScore(20); r.burst(pick.x,pick.y,o.teal,14); }
+        if(pick.kind==='shield'){ shield=1; spawnParticles3d(mapX3d(pick.x),mapY3d(pick.y),o.blue,14); }
+        else { rapidTimer=4; addKillScore(20); spawnParticles3d(mapX3d(pick.x),mapY3d(pick.y),o.teal,14); }
         pickups.splice(i,1);
       }
     }
@@ -223,41 +322,75 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     bullets = bullets.filter(function(bl){ return !bl.dead; });
     pickups = pickups.filter(function(pk){ return pk.x>-20; });
 
-    if(lives<=0){ draw(dt); r.over(Math.floor(dist/10)+killScore, 'Distance '+Math.floor(dist/10)+' m · Score: '+(Math.floor(dist/10)+killScore)); return; }
-    draw(dt);
+    if(lives<=0){ render3d(dt); r.over(Math.floor(dist/10)+killScore, 'Distance '+Math.floor(dist/10)+' m · Score: '+(Math.floor(dist/10)+killScore)); return; }
+    render3d(dt);
   }
 
-  function draw(dt){
-    var i;
-    g(ctx, W, HEIGHT);
-    for(i=-1;i<6;i++){
-      ctx.beginPath();
-      ctx.moveTo(90*i-0.15*parallax%90, 200);
-      ctx.lineTo(90*i+45-0.15*parallax%90, 150);
-      ctx.lineTo(90*i+90-0.15*parallax%90, 200);
-      ctx.closePath(); ctx.fillStyle = '#20194a'; ctx.fill();
-    }
-    ctx.fillStyle = '#3a2a7a'; ctx.fillRect(0,244,W,68);
+  function render3d(dt){
+    mountainGroup3d.children.forEach(function(mesh,idx){
+      var baseX=(idx-1)*4.6;
+      var shiftedX=baseX - (0.15*parallax*20/W)%(4.6*MOUNTAIN_N);
+      while(shiftedX < -4.6*1.5) shiftedX += 4.6*MOUNTAIN_N;
+      mesh.position.x = shiftedX;
+    });
+
+    disposeGroupChildren(craterGroup3d);
     obstacles.forEach(function(o2){
       if(o2.t==='c'){
-        ctx.fillStyle = '#0d0820';
-        ctx.beginPath(); ctx.moveTo(o2.x,244); ctx.lineTo(o2.x+8,266); ctx.lineTo(o2.x+o2.w-8,266); ctx.lineTo(o2.x+o2.w,244); ctx.closePath(); ctx.fill();
-      } else p(ctx, o2.x, 226, 18, 18, 5, '#9aa4b8');
+        var mesh=new THREE.Mesh(new THREE.BoxGeometry(o2.w/20,0.3,1.6),craterMat3d);
+        mesh.position.set(mapX3d(o2.x+o2.w/2), mapY3d(255), 0.3);
+        craterGroup3d.add(mesh);
+      } else {
+        var rmesh=new THREE.Mesh(new THREE.DodecahedronGeometry(0.42),rockMat3d);
+        rmesh.position.set(mapX3d(o2.x+9), mapY3d(226), 0.3);
+        craterGroup3d.add(rmesh);
+      }
     });
-    ctx.fillStyle = o.yellow;
-    bullets.forEach(function(bl){ ctx.fillRect(bl.x-3, bl.y-2, 6, 4); });
-    saucers.forEach(function(s2){ p(ctx, s2.x-16, s2.y-4, 32, 9, 4, s2.hp>1?o.magenta:o.violet); p(ctx, s2.x-8, s2.y-11, 16, 8, 4, o.ink); });
-    bombs.forEach(function(bm){ d(ctx, bm.x, bm.y, 4, o.coral); });
-    pickups.forEach(function(pk){ d(ctx, pk.x, pk.y, 8, pk.kind==='shield'?o.blue:o.teal); d(ctx, pk.x, pk.y, 3, o.ink); });
-    if(deathFreeze<=0 || Math.floor(10*deathFreeze)%2){
-      p(ctx, 80, roverY-16, 34, 10, 4, shield>0?o.blue:o.yellow);
-      p(ctx, 92, roverY-22, 14, 8, 3, o.ink);
-      d(ctx, 86, roverY-2, 6, o.ink);
-      d(ctx, 108, roverY-2, 6, o.ink);
-      d(ctx, 86, roverY-2, 2.5, o.bg);
-      d(ctx, 108, roverY-2, 2.5, o.bg);
+
+    disposeGroupChildren(bulletGroup3d);
+    bullets.forEach(function(bl){
+      var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.12,0.12),bulletMat3d);
+      mesh.position.set(mapX3d(bl.x), mapY3d(bl.y), 0.3);
+      bulletGroup3d.add(mesh);
+    });
+
+    disposeGroupChildren(saucerGroup3d);
+    saucers.forEach(function(s2){
+      var mat=new THREE.MeshStandardMaterial({color: s2.hp>1?new THREE.Color(o.magenta):new THREE.Color(o.violet), emissive: s2.hp>1?new THREE.Color(o.magenta):new THREE.Color(o.violet), emissiveIntensity:0.3, roughness:0.5});
+      var body=new THREE.Mesh(new THREE.SphereGeometry(0.55,12,8),mat);
+      body.scale.set(1,0.45,1);
+      body.position.set(mapX3d(s2.x), mapY3d(s2.y), 0.2);
+      saucerGroup3d.add(body);
+      var dome=new THREE.Mesh(new THREE.SphereGeometry(0.28,10,8),new THREE.MeshStandardMaterial({color:0x10101a,roughness:0.4}));
+      dome.position.set(mapX3d(s2.x), mapY3d(s2.y)+0.22, 0.2);
+      saucerGroup3d.add(dome);
+    });
+
+    disposeGroupChildren(bombGroup3d);
+    bombs.forEach(function(bm){
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),bombMat3d);
+      mesh.position.set(mapX3d(bm.x), mapY3d(bm.y), 0.3);
+      bombGroup3d.add(mesh);
+    });
+
+    disposeGroupChildren(pickupGroup3d);
+    pickups.forEach(function(pk){
+      var col = pk.kind==='shield' ? o.blue : o.teal;
+      var mat=new THREE.MeshStandardMaterial({color:new THREE.Color(col),emissive:new THREE.Color(col),emissiveIntensity:0.4,roughness:0.4});
+      var mesh=new THREE.Mesh(new THREE.OctahedronGeometry(0.38),mat);
+      mesh.position.set(mapX3d(pk.x), mapY3d(pk.y), 0.3);
+      pickupGroup3d.add(mesh);
+    });
+
+    var blink = deathFreeze<=0 || Math.floor(10*deathFreeze)%2;
+    roverGroup3d.visible = !!blink;
+    if(blink){
+      roverGroup3d.position.set(mapX3d(96), mapY3d(roverY-8), 0.5);
+      roverBody3d.material = shield>0 ? roverShieldMat3d : roverMat3d;
     }
-    r.fxStep(dt);
+
+    stepParticles3d(dt);
+    renderer3d.render(scene3d,camera3d);
     r.hud([['SCORE', y(Math.floor(dist/10)+killScore)], ['DIST', Math.floor(dist/10)+'m'], ['LIVES', lives], ['COMBO','x'+comboMult]]);
   }
 
@@ -268,6 +401,12 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
   r.pointer({down:function(pt){ if(pt.x>200) fire(); else jump(); }});
   r.pad([['JUMP','ArrowUp'],['FIRE','x']]);
 
+  r.fns.push(function(){
+    scene3d.traverse(function(obj){extDisposeThree(obj)});
+    renderer3d.dispose();
+    if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+    if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+  });
   r.begin(function(){
     roverY = GROUND; roverVy = 0; obstacles = []; bullets = []; saucers = []; bombs = []; pickups = [];
     dist = 0; parallax = 0; lives = 3; killScore = 0; deathFreeze = 0;
@@ -276,6 +415,8 @@ f(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
     r.fx = [];
     r.frame(step);
   });
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('botSwarm',b,'Bot Swarm',o.coral,'Move with one hand, blast with the other, dodge turret fire and rescue stranded humans.','WASD / arrows move · I J K L (or click and hold) to shoot',function(r){
 function startGame3D(){
 var W=400, HH=400;

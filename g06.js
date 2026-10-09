@@ -248,11 +248,100 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
     r.frame(step);
   });
 }),w('pyramidHop',b,'Pyramid Hop',o.coral,'Hop across every cube of the pyramid to repaint it, chain combos, and dodge the chasers.','Arrows hop diagonally (Up = up-right, Left = up-left, Down = down-left, Right = down-right) · or Q E Z C · or tap a corner',function(r){
-  var ctx = r.canvas(400,400);
+function startGame3D(){
+  var W=400,H=400;
   var grid, player, enemies, discs, lives, score, level, timeAcc, ballTimer, coilTimer, freezeTimer, targetColor, comboMult, comboTimer, livesLostThisLevel, nextExtraLife;
+
+  var wrapDiv=document.createElement('div');
+  wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+  r.el.appendChild(wrapDiv);
+  var canvasWrap=document.createElement('div');
+  canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:1/1;margin:0 auto';
+  wrapDiv.appendChild(canvasWrap);
+
+  var renderer3d=extMakeWebGLRenderer();
+  if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+  renderer3d.setSize(W,H);
+  renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+  renderer3d.setClearColor(0x120a2e,1);
+  canvasWrap.appendChild(renderer3d.domElement);
+  r.cv=renderer3d.domElement;r.w=W;r.h=H;
+
+  var scene3d=new THREE.Scene();
+  scene3d.fog=new THREE.Fog(0x120a2e,24,46);
+  var camera3d=new THREE.PerspectiveCamera(42,W/H,0.1,200);
+  camera3d.position.set(0,15,22);
+  camera3d.lookAt(0,-5,0);
+
+  scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.8));
+  var sun3d=new THREE.DirectionalLight(0xffffff,0.8);
+  sun3d.position.set(8,16,12);
+  scene3d.add(sun3d);
+
+  function disposeGroupChildren(grp){
+    while(grp.children.length){
+      var c2=grp.children.pop();
+      grp.remove(c2);
+      extDisposeThree(c2)
+    }
+  }
+
+  var SHADE_COLORS=[0x3a2a7a,new THREE.Color(o.yellow).getHex(),new THREE.Color(o.teal).getHex()];
+  var cubeMatsByShade=SHADE_COLORS.map(function(hex){return new THREE.MeshStandardMaterial({color:hex,roughness:0.6})});
+  var pyramidGroup3d=new THREE.Group();scene3d.add(pyramidGroup3d);
+  var discGroup3d=new THREE.Group();scene3d.add(discGroup3d);
+  var enemyGroup3d=new THREE.Group();scene3d.add(enemyGroup3d);
+  var playerGroup3d=new THREE.Group();
+  var playerMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.orange),emissive:new THREE.Color(o.orange),emissiveIntensity:0.3,roughness:0.5});
+  var playerBody3d=new THREE.Mesh(new THREE.SphereGeometry(0.85,14,14),playerMat3d);
+  playerGroup3d.add(playerBody3d);
+  var eyeMat3d=new THREE.MeshBasicMaterial({color:0x10101a});
+  var eyeL3d=new THREE.Mesh(new THREE.SphereGeometry(0.17,8,8),eyeMat3d);eyeL3d.position.set(-0.32,0.3,0.68);playerGroup3d.add(eyeL3d);
+  var eyeR3d=new THREE.Mesh(new THREE.SphereGeometry(0.17,8,8),eyeMat3d);eyeR3d.position.set(0.32,0.3,0.68);playerGroup3d.add(eyeR3d);
+  scene3d.add(playerGroup3d);
+
+  var particleMeshes3d=[];
+  function spawnParticles3d(wx,wy,wz,color,n){
+    var col=new THREE.Color(color);
+    for(var pi=0;pi<n;pi++){
+      var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.13,6,6),mat);
+      mesh.position.set(wx,wy,wz);
+      scene3d.add(mesh);
+      var ang=Math.random()*Math.PI*2,sp=0.06+Math.random()*0.2;
+      particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:0.05+Math.random()*0.12,vz:Math.sin(ang)*sp,life:1})
+    }
+  }
+  function stepParticles3d(dt){
+    for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+      var pt=particleMeshes3d[i2];
+      pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+      pt.vy-=0.01;
+      pt.life-=0.035;
+      pt.mesh.material.opacity=Math.max(0,pt.life);
+      if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+    }
+  }
 
   function cubePos(row,col){ return {x: 200+50*(col-row/2), y: 70+40*row}; }
   function validCell(row,col){ return row>=0 && row<6 && col>=0 && col<=row; }
+
+  function pos3d(row,col){
+    return {x:(col-row/2)*2.4, y:-row*1.7, z:row*1.9-4.5};
+  }
+  function animPos3d(ent){
+    var base=pos3d(ent.r,ent.c), target, frac;
+    if(ent.ride){
+      target=pos3d(0,0);
+      frac=1-ent.ride;
+      return {x:base.x+(target.x-base.x)*frac, y:base.y+(target.y-base.y)*frac+2.6*Math.sin(frac*Math.PI), z:base.z+(target.z-base.z)*frac};
+    }
+    if(ent.hop){
+      target=pos3d(ent.tr,ent.tc);
+      return {x:base.x+(target.x-base.x)*ent.t, y:base.y+(target.y-base.y)*ent.t+1.4*Math.sin(ent.t*Math.PI), z:base.z+(target.z-base.z)*ent.t};
+    }
+    return base;
+  }
 
   function newLevel(){
     var row, col;
@@ -305,21 +394,8 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
     if(freezeTimer>0) return;
     lives--; livesLostThisLevel++; comboMult = 1; comboTimer = 0;
     freezeTimer = 1.3;
-    r.burst(animPos(player).x, animPos(player).y-10, o.coral, 24);
-  }
-
-  function animPos(ent){
-    var base = cubePos(ent.r, ent.c), target, frac;
-    if(ent.ride){
-      target = cubePos(0,0);
-      frac = 1-ent.ride;
-      return {x: base.x+(target.x-base.x)*frac, y: base.y+(target.y-base.y)*frac - 30*Math.sin(frac*Math.PI)};
-    }
-    if(ent.hop){
-      target = cubePos(ent.tr, ent.tc);
-      return {x: base.x+(target.x-base.x)*ent.t, y: base.y+(target.y-base.y)*ent.t - 16*Math.sin(ent.t*Math.PI)};
-    }
-    return base;
+    var pp=animPos3d(player);
+    spawnParticles3d(pp.x, pp.y+0.6, pp.z, o.coral, 24);
   }
 
   function projectedCell(ent){ return (ent.hop && ent.t>0.5) ? [ent.tr, ent.tc] : [ent.r, ent.c]; }
@@ -350,10 +426,10 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
     if(freezeTimer>0){
       freezeTimer -= dt;
       if(freezeTimer<=0){
-        if(lives<=0){ draw(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
+        if(lives<=0){ render3d(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
         resetRound();
       }
-      draw(dt);
+      render3d(dt);
       return;
     }
 
@@ -397,7 +473,8 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
         enemies = enemies.filter(function(en){
           if(en.kind==='snake' || en.kind==='coil'){
             score += 400+100*level; checkExtraLife();
-            r.burst(animPos(en).x, animPos(en).y, o.violet, 20);
+            var ep=animPos3d(en);
+            spawnParticles3d(ep.x, ep.y+0.5, ep.z, o.violet, 20);
             return false;
           }
           return true;
@@ -430,7 +507,8 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
         if(projPlayer[0]===projEnemy[0] && projPlayer[1]===projEnemy[1]){
           if(en.kind!=='slick'){ loseLife(); break; }
           score += 300; checkExtraLife();
-          r.burst(animPos(en).x, animPos(en).y, o.green, 14);
+          var ep2=animPos3d(en);
+          spawnParticles3d(ep2.x, ep2.y+0.5, ep2.z, o.green, 14);
           enemies.splice(idx,1);
         }
       }
@@ -444,44 +522,58 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
       resetRound();
     }
 
-    draw(dt);
+    render3d(dt);
   }
 
-  function draw(dt){
-    var row, col, pos, shadeColors = ['#3a2a7a', o.yellow, o.teal];
-    g(ctx, 400, 400);
+  function render3d(dt){
+    disposeGroupChildren(pyramidGroup3d);
+    var row, col, pp;
     for(row=0; row<6; row++){
       for(col=0; col<=row; col++){
-        pos = cubePos(row,col);
-        ctx.beginPath(); ctx.moveTo(pos.x-25,pos.y); ctx.lineTo(pos.x,pos.y+12.5); ctx.lineTo(pos.x,pos.y+38); ctx.lineTo(pos.x-25,pos.y+25.5); ctx.closePath();
-        ctx.fillStyle = '#241C47'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(pos.x+25,pos.y); ctx.lineTo(pos.x,pos.y+12.5); ctx.lineTo(pos.x,pos.y+38); ctx.lineTo(pos.x+25,pos.y+25.5); ctx.closePath();
-        ctx.fillStyle = '#1b1538'; ctx.fill();
-        ctx.beginPath(); ctx.moveTo(pos.x,pos.y-12.5); ctx.lineTo(pos.x+25,pos.y); ctx.lineTo(pos.x,pos.y+12.5); ctx.lineTo(pos.x-25,pos.y); ctx.closePath();
-        ctx.fillStyle = shadeColors[grid[row][col]]; ctx.fill();
-        ctx.strokeStyle = o.bg; ctx.lineWidth = 1; ctx.stroke();
+        pp = pos3d(row,col);
+        var mesh=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.0,2.2),cubeMatsByShade[grid[row][col]]);
+        mesh.position.set(pp.x, pp.y-0.5, pp.z);
+        pyramidGroup3d.add(mesh);
       }
     }
+
+    disposeGroupChildren(discGroup3d);
     discs.forEach(function(dsc){
       if(!dsc.on) return;
-      pos = cubePos(dsc.r, dsc.c);
-      ctx.beginPath(); ctx.ellipse(pos.x, pos.y, 16, 8, 0, 0, e); ctx.fillStyle = Math.floor(4*timeAcc)%2 ? o.magenta : o.blue; ctx.fill();
+      var dp=pos3d(dsc.r, dsc.c);
+      var mat=new THREE.MeshStandardMaterial({color:Math.floor(4*timeAcc)%2 ? new THREE.Color(o.magenta) : new THREE.Color(o.blue),roughness:0.5});
+      var mesh=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,0.35,16),mat);
+      mesh.position.set(dp.x, dp.y+0.05, dp.z);
+      discGroup3d.add(mesh);
     });
+
+    disposeGroupChildren(enemyGroup3d);
     enemies.forEach(function(en){
       if(en.wait>0) return;
-      var pos2 = animPos(en);
-      var col2 = en.kind==='slick' ? o.green : en.kind==='ball' ? o.coral : en.kind==='fastball' ? o.orange : o.violet;
-      d(ctx, pos2.x, pos2.y-10, en.kind==='snake' ? 9 : 8, col2);
-      if(en.kind==='snake'){ d(ctx, pos2.x, pos2.y+2, 6, col2); d(ctx, pos2.x-3, pos2.y-12, 2.4, o.ink); d(ctx, pos2.x+3, pos2.y-12, 2.4, o.ink); }
+      var ep=animPos3d(en);
+      var colHex = en.kind==='slick' ? o.green : en.kind==='ball' ? o.coral : en.kind==='fastball' ? o.orange : o.violet;
+      var mat=new THREE.MeshStandardMaterial({color:new THREE.Color(colHex),emissive:new THREE.Color(colHex),emissiveIntensity:0.25,roughness:0.5});
+      var body=new THREE.Mesh(new THREE.SphereGeometry(en.kind==='snake'?0.78:0.7,12,12),mat);
+      body.position.set(ep.x, ep.y+0.75, ep.z);
+      enemyGroup3d.add(body);
+      if(en.kind==='snake'){
+        var head=new THREE.Mesh(new THREE.SphereGeometry(0.52,10,10),mat);
+        head.position.set(ep.x, ep.y+1.55, ep.z);
+        enemyGroup3d.add(head);
+        var eL=new THREE.Mesh(new THREE.SphereGeometry(0.13,6,6),eyeMat3d);eL.position.set(ep.x-0.22,ep.y+1.6,ep.z+0.4);enemyGroup3d.add(eL);
+        var eR=new THREE.Mesh(new THREE.SphereGeometry(0.13,6,6),eyeMat3d);eR.position.set(ep.x+0.22,ep.y+1.6,ep.z+0.4);enemyGroup3d.add(eR);
+      }
     });
-    if(freezeTimer<=0 || Math.floor(8*freezeTimer)%2){
-      var ppos = animPos(player);
-      d(ctx, ppos.x, ppos.y-11, 10, o.orange);
-      d(ctx, ppos.x-3.5, ppos.y-14, 3, o.ink);
-      d(ctx, ppos.x+3.5, ppos.y-14, 3, o.ink);
-      p(ctx, ppos.x-4, ppos.y-9, 8, 5, 2, o.bg);
+
+    var blink = freezeTimer<=0 || Math.floor(8*freezeTimer)%2;
+    playerGroup3d.visible = !!blink;
+    if(blink){
+      var ppos=animPos3d(player);
+      playerGroup3d.position.set(ppos.x, ppos.y+0.85, ppos.z);
     }
-    r.fxStep(dt);
+
+    stepParticles3d(dt);
+    renderer3d.render(scene3d,camera3d);
     r.hud([['SCORE',y(score)],['LEVEL',level],['LIVES',lives],['COMBO','x'+comboMult]]);
   }
 
@@ -495,6 +587,12 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
   }});
   r.pad([['↖','q'],['↗','e'],['↙','z'],['↘','c']]);
 
+  r.fns.push(function(){
+    scene3d.traverse(function(obj){extDisposeThree(obj)});
+    renderer3d.dispose();
+    if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+    if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+  });
   r.begin(function(){
     lives = 3; score = 0; level = 1; timeAcc = 0; comboMult = 1; comboTimer = 0; nextExtraLife = 3000;
     r.fx = [];
@@ -502,6 +600,8 @@ r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
     resetRound();
     r.frame(step);
   });
+}
+ext3DLoadGate(r.el,startGame3D)
 }),
 w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critters and drop rocks on their heads for chained bonuses.','Arrows / WASD to dig · tap Space to pump the critter in front of you',function(r){
   var CELL=25, COLS=16, ROWS=15, ctx=r.canvas(400,375);
