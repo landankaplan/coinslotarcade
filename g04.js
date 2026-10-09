@@ -405,8 +405,93 @@ r.begin(function(){
 }
 ext3DLoadGate(r.el,startGame3D)
 }),w('swarmStrike',b,'Swarm Strike',o.magenta,'Shoot down a swarm that swoops in, forms up and dive-bombs you — armored flagships take two hits.','Arrows / A D to move · hold Space to fire',function(a){
-var W=400,H=480,ctx=a.canvas(W,H),COLORS=[o.magenta,o.orange,o.yellow,o.green,o.blue];
+function startGame3D(){
+var W=400,H=480,COLORS=[o.magenta,o.orange,o.yellow,o.green,o.blue];
 var px,bullets,enemyBullets,enemies,lives,score,wave,fireCd,diveCd,invuln,animT,combo,comboTimer;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+a.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/480;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){a.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(W,H);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x090417,1);
+canvasWrap.appendChild(renderer3d.domElement);
+a.cv=renderer3d.domElement;a.w=W;a.h=H;
+
+var WH2=10*(H/W);
+function mapX3d(px2){return px2/W*20-10}
+function mapY3d(py){return WH2-py/H*(2*WH2)}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x090417,26,54);
+var camera3d=new THREE.PerspectiveCamera(60,W/H,0.1,200);
+camera3d.position.set(0,0,22);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.85));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+sun3d.position.set(6,14,14);
+scene3d.add(sun3d);
+
+var starGeo3d=new THREE.BufferGeometry();
+var starPos3d=[];
+for(var si3=0;si3<120;si3++){starPos3d.push((Math.random()*2-1)*11,(Math.random()*2-1)*WH2,-8-Math.random()*12)}
+starGeo3d.setAttribute('position',new THREE.Float32BufferAttribute(starPos3d,3));
+scene3d.add(new THREE.Points(starGeo3d,new THREE.PointsMaterial({color:0xe9fbf9,size:0.07,transparent:true,opacity:0.65})));
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c2=grp.children.pop();
+    grp.remove(c2);
+    extDisposeThree(c2)
+  }
+}
+var enemyGroup3d=new THREE.Group();scene3d.add(enemyGroup3d);
+var bulletGroup3d=new THREE.Group();scene3d.add(bulletGroup3d);
+var enemyBulletGroup3d=new THREE.Group();scene3d.add(enemyBulletGroup3d);
+var enemyMatsByRow=COLORS.map(function(col){return new THREE.MeshStandardMaterial({color:new THREE.Color(col),emissive:new THREE.Color(col),emissiveIntensity:0.3,roughness:0.5})});
+var enemyArmorMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.ink),roughness:0.5});
+var bulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+var enemyBulletMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.coral)});
+
+var shipGroup3d=new THREE.Group();
+var shipMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.blue),emissive:new THREE.Color(o.blue),emissiveIntensity:0.35,roughness:0.5});
+var shipBody3d=new THREE.Mesh(new THREE.ConeGeometry(0.95,1.5,4),shipMat3d);
+shipBody3d.rotation.x=Math.PI/2;
+shipBody3d.rotation.y=Math.PI/4;
+shipGroup3d.add(shipBody3d);
+var shipBase3d=new THREE.Mesh(new THREE.BoxGeometry(2.3,0.3,0.6),shipMat3d);
+shipBase3d.position.y=-0.75;
+shipGroup3d.add(shipBase3d);
+scene3d.add(shipGroup3d);
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wy,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+    mesh.position.set(wx,wy,0.3);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
 
 function bezier2(p0,p1,p2,t){var it=1-t;return{x:it*it*p0.x+2*it*t*p1.x+t*t*p2.x,y:it*it*p0.y+2*it*t*p1.y+t*t*p2.y}}
 function formationPos(en){return{x:60+40*en.col+22*Math.sin(.9*animT),y:70+32*en.row+3*Math.sin(1.7*animT+en.col)}}
@@ -483,10 +568,10 @@ function step(dt){
           var mult=1+Math.min(4,Math.floor(combo/5));
           var base=en2.st==='dive'?100+10*en2.row:50;
           score+=base*mult;combo++;comboTimer=2.4;
-          a.burst(en2.x,en2.y,COLORS[en2.row],12);
+          spawnParticles3d(mapX3d(en2.x),mapY3d(en2.y),COLORS[en2.row],12);
           enemies.splice(ei,1)
         }else{
-          a.burst(en2.x,en2.y,o.ink,6)
+          spawnParticles3d(mapX3d(en2.x),mapY3d(en2.y),o.ink,6)
         }
         break
       }
@@ -503,50 +588,70 @@ function step(dt){
     var hitDiver=enemies.filter(function(en){return en.st==='dive'&&Math.abs(en.x-px)<18&&Math.abs(en.y-446)<18})[0];
     if(hitBullet||hitDiver){
       lives--;invuln=2;enemyBullets=[];combo=0;
-      a.burst(px,446,o.blue,26);
+      spawnParticles3d(mapX3d(px),mapY3d(446),o.blue,26);
       if(hitDiver)enemies.splice(enemies.indexOf(hitDiver),1);
-      if(lives<=0){draw(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
+      if(lives<=0){render3d(dt);a.over(score,'Wave '+wave+' · Score: '+score);return}
     }
   }
   invuln-=dt;
   if(!enemies.length){wave++;score+=200;invuln=1.5;buildWave()}
-  draw(dt)
+  render3d(dt)
 }
 
-function draw(dt){
-  var wobble=5*Math.sin(14*animT);
-  g(ctx,W,H);
-  for(var si=0;si<30;si++)d(ctx,137*si%W,(71*si+30*animT*(1+si%3))%H,1,'rgba(233,251,249,.35)');
+function render3d(dt){
+  disposeGroupChildren(enemyGroup3d);
   enemies.forEach(function(en){
     if(en.st==='in'&&en.u<0)return;
-    var col=COLORS[en.row];
-    ctx.beginPath();ctx.moveTo(en.x-6,en.y-2);ctx.lineTo(en.x-17,en.y-8+wobble);ctx.lineTo(en.x-13,en.y+6);ctx.closePath();ctx.fillStyle=col;ctx.fill();
-    ctx.beginPath();ctx.moveTo(en.x+6,en.y-2);ctx.lineTo(en.x+17,en.y-8+wobble);ctx.lineTo(en.x+13,en.y+6);ctx.closePath();ctx.fill();
-    d(ctx,en.x,en.y,8,en.hp>1?o.ink:col);
-    if(en.hp>1)d(ctx,en.x,en.y,5,col);
-    d(ctx,en.x-3,en.y-1,2.4,o.bg);d(ctx,en.x+3,en.y-1,2.4,o.bg)
+    var mat=enemyMatsByRow[en.row];
+    var body=new THREE.Mesh(new THREE.ConeGeometry(0.85,0.9,6),mat);
+    body.rotation.x=Math.PI;
+    body.position.set(mapX3d(en.x),mapY3d(en.y),0);
+    enemyGroup3d.add(body);
+    if(en.hp>1){
+      var armor=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.13,8,14),enemyArmorMat3d);
+      armor.position.set(mapX3d(en.x),mapY3d(en.y),0);
+      enemyGroup3d.add(armor);
+    }
   });
-  ctx.fillStyle=o.ink;
-  bullets.forEach(function(bl){ctx.fillRect(bl.x-2,bl.y-8,4,14)});
-  ctx.fillStyle=o.coral;
-  enemyBullets.forEach(function(eb){d(ctx,eb.x,eb.y,4,o.coral)});
-  if(invuln<=0||Math.floor(10*invuln)%2){
-    ctx.beginPath();ctx.moveTo(px,424);ctx.lineTo(px-8,450);ctx.lineTo(px-20,458);ctx.lineTo(px+20,458);ctx.lineTo(px+8,450);ctx.closePath();
-    ctx.fillStyle=o.blue;ctx.fill();
-    p(ctx,px-3,430,6,24,3,o.ink)
-  }
-  a.fxStep(dt);
-  for(var li=0;li<lives;li++)p(ctx,10+18*li,466,12,8,3,o.blue);
+
+  disposeGroupChildren(bulletGroup3d);
+  bullets.forEach(function(bl){
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.7,0.2),bulletMat3d);
+    mesh.position.set(mapX3d(bl.x),mapY3d(bl.y),0);
+    bulletGroup3d.add(mesh);
+  });
+
+  disposeGroupChildren(enemyBulletGroup3d);
+  enemyBullets.forEach(function(eb){
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),enemyBulletMat3d);
+    mesh.position.set(mapX3d(eb.x),mapY3d(eb.y),0);
+    enemyBulletGroup3d.add(mesh);
+  });
+
+  var blink=invuln<=0||Math.floor(10*invuln)%2;
+  shipGroup3d.visible=!!blink;
+  if(blink)shipGroup3d.position.set(mapX3d(px),mapY3d(442),0);
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
   a.hud([['SCORE',y(score)],['WAVE',wave],['SHIPS',lives],['COMBO','x'+(1+Math.min(4,Math.floor(combo/5)))]])
 }
 
 a.pad([['◀','ArrowLeft'],['FIRE','Space'],['▶','ArrowRight']]);
+a.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 a.begin(function(){
   px=200;lives=3;score=0;wave=1;fireCd=1.5;diveCd=3;invuln=1.5;animT=0;combo=0;comboTimer=0;
   a.fx=[];
   buildWave();
   a.frame(step)
 })
+}
+ext3DLoadGate(a.el,startGame3D)
 }),w('vineCrawler',b,'Vine Crawler',o.green,'A segmented crawler snakes through your garden while a mushroom-eating spider stalks the field — chain kills for a bonus multiplier.','Arrows / WASD to move · hold Space to fire',function(a){
 var TILE=20,COLS=20,CEIL_ROW=17,W=400,H=460,ctx=a.canvas(W,H);
 var grid,worms,player,bullets,spider,lives,score,wave,fireCd,hitFreeze,moveAcc,spiderCd,elapsed,combo,comboTimer;

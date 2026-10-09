@@ -845,15 +845,121 @@ a.begin(newMatch)
 }
 ext3DLoadGate(a.el,startGame3D)
 }),w('silverBall',b,'Silver Ball',o.violet,'Flip, bump and chain combos into multiball before the last ball drains.','Left/Right (or Z / M) to flip · Space to nudge · limited nudge charges',function(r){
-  var ctx = r.canvas(360,500);
+function startGame3D(){
+  var W=360,H=500;
   var walls = [[10,70,70,10],[70,10,290,10],[290,10,350,70],[10,70,10,400],[350,70,350,400],[10,400,108,462],[350,400,252,462]];
   var bumpers = [{x:130,y:150,r:20,lit:0},{x:230,y:150,r:20,lit:0},{x:180,y:232,r:22,lit:0},{x:62,y:270,r:13,lit:0},{x:298,y:270,r:13,lit:0}];
   var targets, flippers, balls, score, lives, comboMult, comboTimer, level, nudgeCharges, nextExtraBall, bankMsg;
 
+  var wrapDiv=document.createElement('div');
+  wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+  r.el.appendChild(wrapDiv);
+  var canvasWrap=document.createElement('div');
+  canvasWrap.style.cssText='position:relative;width:100%;max-width:360px;aspect-ratio:360/500;margin:0 auto';
+  wrapDiv.appendChild(canvasWrap);
+
+  var renderer3d=extMakeWebGLRenderer();
+  if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+  renderer3d.setSize(W,H);
+  renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+  renderer3d.setClearColor(0x120a24,1);
+  canvasWrap.appendChild(renderer3d.domElement);
+  r.cv=renderer3d.domElement;r.w=W;r.h=H;
+
+  var WH2=10*(H/W);
+  function mapX3d(px2){return px2/W*20-10}
+  function mapY3d(py){return WH2-py/H*(2*WH2)}
+
+  var scene3d=new THREE.Scene();
+  scene3d.fog=new THREE.Fog(0x120a24,30,56);
+  var camera3d=new THREE.PerspectiveCamera(60,W/H,0.1,200);
+  camera3d.position.set(0,0,24);
+  camera3d.lookAt(0,0,0);
+
+  scene3d.add(new THREE.AmbientLight(0xcfe3ff,0.85));
+  var sun3d=new THREE.DirectionalLight(0xffffff,0.75);
+  sun3d.position.set(6,10,14);
+  scene3d.add(sun3d);
+
+  function segMesh3d(x1,y1,x2,y2,thickness,mat){
+    var p1={x:mapX3d(x1),y:mapY3d(y1)}, p2={x:mapX3d(x2),y:mapY3d(y2)};
+    var mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+    var len=Math.hypot(p2.x-p1.x,p2.y-p1.y);
+    var ang=Math.atan2(p2.y-p1.y,p2.x-p1.x);
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(len,thickness,thickness),mat);
+    mesh.position.set(mx,my,0.2);
+    mesh.rotation.z=ang;
+    return mesh;
+  }
+
+  var wallMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.violet),emissive:new THREE.Color(o.violet),emissiveIntensity:0.25,roughness:0.5});
+  walls.forEach(function(wl){ scene3d.add(segMesh3d(wl[0],wl[1],wl[2],wl[3],0.3,wallMat3d)); });
+
+  var bumperLitMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.yellow),emissive:new THREE.Color(o.yellow),emissiveIntensity:0.5,roughness:0.4});
+  var bumperOffMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.magenta),emissive:new THREE.Color(o.magenta),emissiveIntensity:0.2,roughness:0.5});
+  var bumperMeshes3d = bumpers.map(function(bp){
+    var mesh=new THREE.Mesh(new THREE.CylinderGeometry(bp.r/14,bp.r/14,0.7,16),bumperOffMat3d);
+    mesh.rotation.x=Math.PI/2;
+    mesh.position.set(mapX3d(bp.x),mapY3d(bp.y),0.2);
+    scene3d.add(mesh);
+    return mesh;
+  });
+
+  var targetHitMat3d=new THREE.MeshStandardMaterial({color:0x2a2050,roughness:0.7});
+  var targetLiveMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),emissive:new THREE.Color(o.teal),emissiveIntensity:0.4,roughness:0.4});
+  var targetMeshes3d = [];
+
+  var flipperMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),emissive:new THREE.Color(o.teal),emissiveIntensity:0.25,roughness:0.5});
+  var flipperPivotMat3d=new THREE.MeshStandardMaterial({color:0x10101a,roughness:0.5});
+  var flipperMeshes3d = [];
+  var flipperPivotMeshes3d = [];
+
+  function disposeGroupChildren(grp){
+    while(grp.children.length){
+      var c2=grp.children.pop();
+      grp.remove(c2);
+      extDisposeThree(c2)
+    }
+  }
+  var ballGroup3d=new THREE.Group();scene3d.add(ballGroup3d);
+  var ballMat3d=new THREE.MeshStandardMaterial({color:0xd8dee8,metalness:0.6,roughness:0.25,emissive:0x9fb5c9,emissiveIntensity:0.15});
+
+  var particleMeshes3d=[];
+  function spawnParticles3d(wx,wy,color,n){
+    var col=new THREE.Color(color);
+    for(var pi=0;pi<n;pi++){
+      var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),mat);
+      mesh.position.set(wx,wy,0.4);
+      scene3d.add(mesh);
+      var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+      particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+    }
+  }
+  function stepParticles3d(dt){
+    for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+      var pt=particleMeshes3d[i2];
+      pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+      pt.life-=0.035;
+      pt.mesh.material.opacity=Math.max(0,pt.life);
+      if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+    }
+  }
+
   function makeFlipper(px, dir){ return {px:px, py:462, dir:dir, len:64, ang:0.5, tip:{x:0,y:0}, prev:{x:0,y:0}}; }
   function flipperTip(fl){ return {x: fl.px + fl.dir*fl.len*Math.cos(fl.ang), y: fl.py + fl.len*Math.sin(fl.ang)}; }
 
-  function resetTargets(){ targets = [{x:150,y:96,r:9,hit:0},{x:180,y:80,r:9,hit:0},{x:210,y:96,r:9,hit:0}]; }
+  function resetTargets(){
+    targets = [{x:150,y:96,r:9,hit:0},{x:180,y:80,r:9,hit:0},{x:210,y:96,r:9,hit:0}];
+    targetMeshes3d.forEach(function(m){ scene3d.remove(m); extDisposeThree(m); });
+    targetMeshes3d = targets.map(function(tg){
+      var mesh=new THREE.Mesh(new THREE.CylinderGeometry(tg.r/14,tg.r/14,0.5,14),targetLiveMat3d);
+      mesh.rotation.x=Math.PI/2;
+      mesh.position.set(mapX3d(tg.x),mapY3d(tg.y),0.2);
+      scene3d.add(mesh);
+      return mesh;
+    });
+  }
 
   function spawnBall(withGrace){
     return {x:150+f(60), y:60, vx:c(-60,60), vy:0, r:8, grace: withGrace?0.6:0.35};
@@ -887,10 +993,10 @@ ext3DLoadGate(a.el,startGame3D)
 
   function loseBall(ball){
     balls.splice(balls.indexOf(ball),1);
-    r.burst(ball.x, ball.y, o.magenta, 20);
+    spawnParticles3d(mapX3d(ball.x), mapY3d(ball.y), o.magenta, 20);
     if(balls.length===0){
       lives--;
-      if(lives<=0){ draw(0); r.over(score, 'Score: '+score); return; }
+      if(lives<=0){ render3d(0); r.over(score, 'Score: '+score); return; }
       nudgeCharges = 3;
       comboMult = 1; comboTimer = 0;
       balls.push(spawnBall(true));
@@ -933,7 +1039,7 @@ ext3DLoadGate(a.el,startGame3D)
             bp.lit = 0.15;
             score += bumperPts()*comboMult;
             addCombo();
-            r.burst(bp.x, bp.y, o.yellow, 6);
+            spawnParticles3d(mapX3d(bp.x), mapY3d(bp.y), o.yellow, 6);
             checkExtraBall();
           }
         }
@@ -949,12 +1055,12 @@ ext3DLoadGate(a.el,startGame3D)
             tg.hit = 1;
             score += targetPts()*comboMult;
             addCombo();
-            r.burst(tg.x, tg.y, o.teal, 10);
+            spawnParticles3d(mapX3d(tg.x), mapY3d(tg.y), o.teal, 10);
             checkExtraBall();
             if(targets.every(function(z){ return z.hit; })){
               score += 800+200*(level-1);
               addCombo();
-              r.burst(180,88,o.violet,26);
+              spawnParticles3d(mapX3d(180), mapY3d(88), o.violet, 26);
               resetTargets();
               if(balls.length<3) balls.push(spawnBall(false));
               checkExtraBall();
@@ -971,21 +1077,35 @@ ext3DLoadGate(a.el,startGame3D)
 
     bumpers.forEach(function(bp){ if(bp.lit>0) bp.lit -= dt; });
     level = 1+Math.floor(score/4000);
-    draw(dt);
+    render3d(dt);
   }
 
-  function draw(dt){
-    g(ctx,360,500);
-    walls.forEach(function(wl){ v(ctx, wl[0],wl[1],wl[2],wl[3], o.violet, 4); });
-    targets.forEach(function(tg){ d(ctx, tg.x, tg.y, tg.r, tg.hit?o.dim:o.teal); d(ctx, tg.x, tg.y, tg.r-4, tg.hit?'#241C47':o.ink); });
-    bumpers.forEach(function(bp){ d(ctx, bp.x, bp.y, bp.r, bp.lit>0?o.yellow:o.magenta); d(ctx, bp.x, bp.y, bp.r-5, bp.lit>0?o.ink:'#7a2a5a'); });
-    flippers.forEach(function(fl){ v(ctx, fl.px, fl.py, fl.tip.x, fl.tip.y, o.teal, 10); d(ctx, fl.px, fl.py, 6, o.ink); });
+  function render3d(dt){
+    bumpers.forEach(function(bp,idx){ bumperMeshes3d[idx].material = bp.lit>0 ? bumperLitMat3d : bumperOffMat3d; });
+    targets.forEach(function(tg,idx){ if(targetMeshes3d[idx]) targetMeshes3d[idx].material = tg.hit ? targetHitMat3d : targetLiveMat3d; });
+
+    flippers.forEach(function(fl, idx){
+      if(flipperMeshes3d[idx]){ scene3d.remove(flipperMeshes3d[idx]); extDisposeThree(flipperMeshes3d[idx]); }
+      flipperMeshes3d[idx] = segMesh3d(fl.px, fl.py, fl.tip.x, fl.tip.y, 0.75, flipperMat3d);
+      scene3d.add(flipperMeshes3d[idx]);
+      if(!flipperPivotMeshes3d[idx]){
+        flipperPivotMeshes3d[idx] = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.4,10), flipperPivotMat3d);
+        flipperPivotMeshes3d[idx].rotation.x = Math.PI/2;
+        scene3d.add(flipperPivotMeshes3d[idx]);
+      }
+      flipperPivotMeshes3d[idx].position.set(mapX3d(fl.px), mapY3d(fl.py), 0.25);
+    });
+
+    disposeGroupChildren(ballGroup3d);
     balls.forEach(function(ball){
       if(ball.grace>0 && Math.floor(ball.grace*10)%2) return;
-      d(ctx, ball.x, ball.y, ball.r, o.ink);
-      d(ctx, ball.x-2, ball.y-2, 2.5, '#9fb5c9');
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(ball.r/14,12,12),ballMat3d);
+      mesh.position.set(mapX3d(ball.x), mapY3d(ball.y), 0.3);
+      ballGroup3d.add(mesh);
     });
-    r.fxStep(dt);
+
+    stepParticles3d(dt);
+    renderer3d.render(scene3d,camera3d);
     r.hud([['SCORE',y(score)],['BALLS',lives],['LVL',level],['COMBO','x'+comboMult]]);
   }
 
@@ -1002,6 +1122,12 @@ ext3DLoadGate(a.el,startGame3D)
 
   r.pad([['◀ FLIP','z'],['NUDGE',' '],['FLIP ▶','m']]);
 
+  r.fns.push(function(){
+    scene3d.traverse(function(obj){extDisposeThree(obj)});
+    renderer3d.dispose();
+    if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+    if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+  });
   r.begin(function(){
     lives = 3; score = 0; level = 1; comboMult = 1; comboTimer = 0; nudgeCharges = 3; nextExtraBall = 8000; bankMsg = 0;
     flippers = [makeFlipper(108,1), makeFlipper(252,-1)];
@@ -1011,6 +1137,8 @@ ext3DLoadGate(a.el,startGame3D)
     r.fx = [];
     r.frame(step);
   });
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('caveCopter',b,'Cave Copter',o.orange,'Hold to climb, thread the winding cave, and grab fuel orbs without clipping a wall.','Hold Space / Up / click to climb',function(r){
   var W=400, H=360, ctx=r.canvas(W,H);
   var cave, scrollAcc, heliY, heliVel, dist, tunnelW, nextCenter, gateCd, gates, orbs, orbCd, heliX, shield, invuln, bonus, timeAcc;
