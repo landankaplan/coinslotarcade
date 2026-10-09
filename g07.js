@@ -720,8 +720,87 @@ r.begin(function(){
 }
 ext3DLoadGate(r.el,startGame3D)
 }),w('landGrab',b,'Land Grab',o.blue,'Draw lines to fence off territory, chain claims for a bonus, and keep clear of the wild sparks.','Arrows / WASD to move and draw · fence off 75% to clear the level',function(r){
-  var GRID=40, CELL=10, ctx=r.canvas(400,400);
+function startGame3D(){
+  var GRID=40, CELL=10, W=400;
   var grid, player, trail, drawing, sparks, lives, score, level, claimedPct, moveAccum, axisLock, comboMult, comboTimer, nextExtraLife;
+
+  var wrapDiv=document.createElement('div');
+  wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+  r.el.appendChild(wrapDiv);
+  var canvasWrap=document.createElement('div');
+  canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:1/1;margin:0 auto';
+  wrapDiv.appendChild(canvasWrap);
+
+  var renderer3d=extMakeWebGLRenderer();
+  if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+  renderer3d.setSize(W,W);
+  renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+  renderer3d.setClearColor(0x0a0a1a,1);
+  canvasWrap.appendChild(renderer3d.domElement);
+  r.cv=renderer3d.domElement;r.w=W;r.h=W;
+
+  function mapX3d(px2){return px2/W*20-10}
+  function mapZ3d(py){return 10-py/W*20}
+
+  var scene3d=new THREE.Scene();
+  scene3d.fog=new THREE.Fog(0x0a0a1a,22,46);
+  var camera3d=new THREE.PerspectiveCamera(48,1,0.1,200);
+  camera3d.position.set(0,16,11);
+  camera3d.lookAt(0,0,0);
+
+  scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.8));
+  var sun3d=new THREE.DirectionalLight(0xffffff,0.7);
+  sun3d.position.set(8,20,8);
+  scene3d.add(sun3d);
+
+  var gridTexCanvas=document.createElement('canvas');
+  gridTexCanvas.width=400;gridTexCanvas.height=400;
+  var gridTexCtx=gridTexCanvas.getContext('2d');
+  var gridTexture=new THREE.CanvasTexture(gridTexCanvas);
+  gridTexture.flipY=false;
+  var floor3d=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshStandardMaterial({map:gridTexture,roughness:0.9}));
+  floor3d.rotation.x=-Math.PI/2;
+  scene3d.add(floor3d);
+
+  function disposeGroupChildren(grp){
+    while(grp.children.length){
+      var c2=grp.children.pop();
+      grp.remove(c2);
+      extDisposeThree(c2)
+    }
+  }
+  var sparkGroup3d=new THREE.Group();scene3d.add(sparkGroup3d);
+  var sparkMatA3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.yellow)});
+  var sparkMatB3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.magenta)});
+  var sparkCoreMat3d=new THREE.MeshStandardMaterial({color:0x10101a,roughness:0.5});
+
+  var playerMat3d=new THREE.MeshStandardMaterial({color:0xf4f1ff,emissive:new THREE.Color(o.blue),emissiveIntensity:0.6,roughness:0.3});
+  var playerMesh3d=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.45,0.6),playerMat3d);
+  playerMesh3d.rotation.y=Math.PI/4;
+  scene3d.add(playerMesh3d);
+
+  var particleMeshes3d=[];
+  function spawnParticles3d(wx,wz,color,n){
+    var col=new THREE.Color(color);
+    for(var pi=0;pi<n;pi++){
+      var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+      mesh.position.set(wx,0.3,wz);
+      scene3d.add(mesh);
+      var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+      particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:0.04+Math.random()*0.1,vz:Math.sin(ang)*sp,life:1})
+    }
+  }
+  function stepParticles3d(dt){
+    for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+      var pt=particleMeshes3d[i2];
+      pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+      pt.vy-=0.01;
+      pt.life-=0.035;
+      pt.mesh.material.opacity=Math.max(0,pt.life);
+      if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+    }
+  }
 
   function sparkCount(){ return level>=9 ? 4 : level>=6 ? 3 : level>=3 ? 2 : 1; }
 
@@ -740,9 +819,10 @@ ext3DLoadGate(r.el,startGame3D)
 
   function die(){
     trail.forEach(function(cell){ grid[cell[1]][cell[0]] = 0; });
-    trail = []; drawing = false; player = {x:0, y:39};
+    trail = []; drawing = false;
+    spawnParticles3d(mapX3d(player.x*CELL+5), mapZ3d(player.y*CELL+5), o.blue, 24);
+    player = {x:0, y:39};
     lives--; comboMult = 1; comboTimer = 0;
-    r.burst(player.x*CELL+5, player.y*CELL+5, o.blue, 24);
   }
 
   function checkExtraLife(){
@@ -750,7 +830,7 @@ ext3DLoadGate(r.el,startGame3D)
   }
 
   function floodFillClaim(){
-    var row, col, visited = [], claimedNew = 0, total = 0, r2;
+    var row, col, visited = [], claimedNew = 0, total = 0;
     trail.forEach(function(cell){ grid[cell[1]][cell[0]] = 1; });
     trail = [];
     for(row=0; row<GRID; row++) visited.push(new Array(GRID).fill(0));
@@ -832,40 +912,59 @@ ext3DLoadGate(r.el,startGame3D)
     });
     if(sparks.some(function(sp){ return sp.hit; })){ sparks.forEach(function(sp){ sp.hit=0; }); die(); }
 
-    if(lives<=0){ draw(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
-    draw(dt);
+    if(lives<=0){ render3d(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
+    render3d(dt);
   }
 
-  function draw(dt){
-    var row, col, k;
-    g(ctx, 400, 400);
+  function render3d(dt){
+    var row, col;
+    gridTexCtx.fillStyle = '#0a0a1a';
+    gridTexCtx.fillRect(0,0,400,400);
     for(row=0; row<GRID; row++){
       for(col=0; col<GRID; col++){
-        if(grid[row][col]===1){ ctx.fillStyle = (col===0||row===0||col===39||row===39) ? o.violet : '#2c4a7a'; ctx.fillRect(col*CELL, row*CELL, CELL, CELL); }
-        else if(grid[row][col]===2){ ctx.fillStyle = o.orange; ctx.fillRect(col*CELL+1, row*CELL+1, 8, 8); }
+        if(grid[row][col]===1){ gridTexCtx.fillStyle = (col===0||row===0||col===39||row===39) ? o.violet : '#2c4a7a'; gridTexCtx.fillRect(col*CELL, row*CELL, CELL, CELL); }
+        else if(grid[row][col]===2){ gridTexCtx.fillStyle = o.orange; gridTexCtx.fillRect(col*CELL+1, row*CELL+1, 8, 8); }
       }
     }
+    gridTexture.needsUpdate = true;
+
+    disposeGroupChildren(sparkGroup3d);
     sparks.forEach(function(sp){
-      for(k=0;k<4;k++) v(ctx, sp.x, sp.y, sp.x+14*Math.cos(sp.r+1.57*k), sp.y+14*Math.sin(sp.r+1.57*k), k%2?o.magenta:o.yellow, 2.5);
-      d(ctx, sp.x, sp.y, 3, o.ink);
+      var core=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8),sparkCoreMat3d);
+      core.position.set(mapX3d(sp.x),0.32,mapZ3d(sp.y));
+      sparkGroup3d.add(core);
+      for(var k=0;k<4;k++){
+        var ang=sp.r+1.5708*k;
+        var arm=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.1,0.1),k%2?sparkMatB3d:sparkMatA3d);
+        arm.position.set(mapX3d(sp.x+7*Math.cos(ang)),0.32,mapZ3d(sp.y+7*Math.sin(ang)));
+        arm.rotation.y=-ang;
+        sparkGroup3d.add(arm);
+      }
     });
-    ctx.save();
-    ctx.translate(player.x*CELL+5, player.y*CELL+5);
-    ctx.rotate(Math.PI/4);
-    p(ctx, -6, -6, 12, 12, 2, o.ink);
-    ctx.restore();
-    r.fxStep(dt);
+
+    playerMesh3d.position.set(mapX3d(player.x*CELL+5),0.26,mapZ3d(player.y*CELL+5));
+
+    stepParticles3d(dt);
+    renderer3d.render(scene3d,camera3d);
     r.hud([['SCORE',y(score)],['CLAIMED',claimedPct+'%'],['LIVES',lives],['COMBO','x'+comboMult]]);
   }
 
   r.pad([['▲','ArrowUp'],['◀','ArrowLeft'],['▶','ArrowRight'],['▼','ArrowDown']]);
 
+  r.fns.push(function(){
+    scene3d.traverse(function(obj){extDisposeThree(obj)});
+    renderer3d.dispose();
+    if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+    if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+  });
   r.begin(function(){
     lives = 3; score = 0; level = 1; axisLock = null; comboMult = 1; comboTimer = 0; nextExtraLife = 4000;
     r.fx = [];
     newLevel();
     r.frame(step);
   });
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('fruitSlash',m,'Fruit Slash',o.green,'Chain slices for a combo bonus, snag the rare golden fruit, and dodge the bombs.','Drag / swipe across fruit · slice several in one swipe for a combo bonus · avoid the bombs · miss 3 and it is over',function(r){
 var W=400,H=420,ctx=r.canvas(W,H);
 var fruitTypes=[
