@@ -165,13 +165,88 @@ a.press=function(key){
 a.opt('Difficulty',['Easy','Normal','Hard'],diff,function(i){diff=i;startGame();});
 a.begin(startGame);
 }),w('fiveInRow',k,'Five In Row',o.blue,'Line up five stones in any direction before the rival does — and watch for their open threes.','Click an intersection · arrows + Space work too · beat the rival to move on',function(a){
-var SIZE=15,CELLPX=24,PADX=32,PADY=62;
-var ctx=a.canvas(400,450);
+function startGame3D(){
+var SIZE=15,CELLPX=24,PADX=32,PADY=62,W=400,H=450;
 var DIRS4=[[1,0],[0,1],[1,1],[1,-1]];
 var diff=1,DIFF=[{depth:1,K:10,rand:0.12},{depth:3,K:7,rand:0},{depth:4,K:8,rand:0}];
 var board,turn,over,score,wins,msg,keyNav,cursor,lastMove,winLine,moveCount,aiDelay;
-function inBounds(r,c){return r>=0&&c>=0&&r<SIZE&&c<SIZE;}
-function getCell(bd,r,c){return inBounds(r,c)?bd[r*SIZE+c]:-1;}
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+a.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/450;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){a.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(W,H);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x0d1530,1);
+canvasWrap.appendChild(renderer3d.domElement);
+a.cv=renderer3d.domElement;a.w=W;a.h=H;
+
+var SCALE3d=20/W;
+var ZH2=H*SCALE3d/2;
+var camRatio3d=ZH2/9.375;
+function mapX3d(px2){return px2*SCALE3d-10}
+function mapZ3d(py){return py*SCALE3d-ZH2}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x0d1530,24*camRatio3d,50*camRatio3d);
+var camera3d=new THREE.PerspectiveCamera(64,W/H,0.1,200);
+camera3d.position.set(0,16*camRatio3d,11*camRatio3d);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.8));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.7);
+sun3d.position.set(8,20,8);
+scene3d.add(sun3d);
+
+var boardTexCanvas=document.createElement('canvas');
+boardTexCanvas.width=W;boardTexCanvas.height=H;
+var ctx=boardTexCanvas.getContext('2d');
+var boardTexture=new THREE.CanvasTexture(boardTexCanvas);
+var floor3d=new THREE.Mesh(new THREE.PlaneGeometry(20,2*ZH2),new THREE.MeshStandardMaterial({map:boardTexture,roughness:0.9}));
+floor3d.rotation.x=-Math.PI/2;
+scene3d.add(floor3d);
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c2=grp.children.pop();
+    grp.remove(c2);
+    extDisposeThree(c2)
+  }
+}
+var stoneGroup3d=new THREE.Group();scene3d.add(stoneGroup3d);
+var mineMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),emissive:new THREE.Color(o.teal),emissiveIntensity:0.25,roughness:0.45});
+var rivalMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.coral),emissive:new THREE.Color(o.coral),emissiveIntensity:0.25,roughness:0.45});
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wz,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+    mesh.position.set(wx,0.3,wz);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:0.04+Math.random()*0.1,vz:Math.sin(ang)*sp,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.vy-=0.01;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
+function inBounds(r2,c2){return r2>=0&&c2>=0&&r2<SIZE&&c2<SIZE;}
+function getCell(bd,r2,c2){return inBounds(r2,c2)?bd[r2*SIZE+c2]:-1;}
 function placementScore(bd,idx,player){
   var row=Math.floor(idx/SIZE),col=idx%SIZE,total=0;
   DIRS4.forEach(function(dir){
@@ -222,8 +297,8 @@ function getCandidates(bd){
 }
 function findWinLine(bd,idx,player){
   var row=Math.floor(idx/SIZE),col=idx%SIZE;
-  for(var d=0;d<4;d++){
-    var dir=DIRS4[d],cells=[[row,col]],step;
+  for(var d2=0;d2<4;d2++){
+    var dir=DIRS4[d2],cells=[[row,col]],step;
     for(step=1;getCell(bd,row+dir[0]*step,col+dir[1]*step)===player;step++)cells.push([row+dir[0]*step,col+dir[1]*step]);
     for(step=1;getCell(bd,row-dir[0]*step,col-dir[1]*step)===player;step++)cells.unshift([row-dir[0]*step,col-dir[1]*step]);
     if(cells.length>=5)return cells;
@@ -257,13 +332,15 @@ function startGame(){
   a.fx=[];
   a.frame(step);
 }
+function cellCx(idx){return PADX+(idx%SIZE)*CELLPX;}
+function cellCy(idx){return PADY+Math.floor(idx/SIZE)*CELLPX;}
 function finishGame(winner){
   over=true;
   if(winner===1){
     var gain=Math.round((100+20*wins)*(1+0.5*diff));
     score+=gain;wins++;
     msg='Five in a row. You win! (+'+gain+')';
-    a.burst(cellCx(lastMove),cellCy(lastMove),o.blue,40);
+    spawnParticles3d(mapX3d(cellCx(lastMove)),mapZ3d(cellCy(lastMove)),o.blue,40);
     a.later(newGame,1800);
   }else if(winner===0){
     msg='Board full. Draw.';
@@ -273,8 +350,6 @@ function finishGame(winner){
     a.later(function(){a.over(score,'Beaten after '+wins+' win'+(wins===1?'':'s')+' on '+['Easy','Normal','Hard'][diff]+'. Score: '+score);},1500);
   }
 }
-function cellCx(idx){return PADX+(idx%SIZE)*CELLPX;}
-function cellCy(idx){return PADY+Math.floor(idx/SIZE)*CELLPX;}
 function placeStone(idx,player){
   board[idx]=player;lastMove=idx;moveCount++;
   var line=findWinLine(board,idx,player);
@@ -311,6 +386,9 @@ function step(dt){
     aiDelay-=dt;
     if(aiDelay<=0){aiDelay=99;aiMove();}
   }
+  render3d(dt)
+}
+function render3d(dt){
   g(ctx,400,450);
   p(ctx,14,44,372,372,10,'#1d2b55');
   var i;
@@ -319,12 +397,11 @@ function step(dt){
     v(ctx,PADX+i*CELLPX,PADY,PADX+i*CELLPX,PADY+(SIZE-1)*CELLPX,'rgba(255,255,255,.18)',1);
   }
   if(turn===1&&!over)getCandidates(board).forEach(function(idx){d(ctx,cellCx(idx),cellCy(idx),3,'rgba(255,255,255,.18)');});
+  var stoneRenderList=[];
   for(i=0;i<SIZE*SIZE;i++){
     if(!board[i])continue;
     var cx=cellCx(i),cy=cellCy(i);
-    d(ctx,cx,cy+1,10,'rgba(0,0,0,.35)');
-    d(ctx,cx,cy,10,board[i]===1?o.teal:o.coral);
-    d(ctx,cx-3,cy-3,3,'rgba(255,255,255,.35)');
+    stoneRenderList.push({cx:cx,cy:cy,player:board[i]});
     if(i===lastMove){ctx.strokeStyle=o.yellow;ctx.lineWidth=2;d(ctx,cx,cy,12);ctx.stroke();}
   }
   if(winLine){
@@ -335,6 +412,18 @@ function step(dt){
   }
   if(keyNav&&!over){var kx=cellCx(cursor),ky=cellCy(cursor);ctx.strokeStyle=o.ink;ctx.lineWidth=2;r.L(ctx,kx-11,ky-11,22,22,5);ctx.stroke();}
   x(ctx,msg||(turn===1?'Your move':'Rival is thinking'),200,30,16,o.ink);
+  boardTexture.needsUpdate=true;
+
+  disposeGroupChildren(stoneGroup3d);
+  stoneRenderList.forEach(function(sr){
+    var mat=sr.player===1?mineMat3d:rivalMat3d;
+    var body=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.22,16),mat);
+    body.position.set(mapX3d(sr.cx),0.11,mapZ3d(sr.cy));
+    stoneGroup3d.add(body);
+  });
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
   a.fxStep(dt);
   a.hud([['SCORE',y(score)],['WINS',wins]]);
 }
@@ -355,6 +444,14 @@ a.press=function(key){
 };
 a.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRight'],['Place','Space']]);
 a.opt('Difficulty',['Easy','Normal','Hard'],diff,function(i){diff=i;startGame();});
+a.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 a.begin(startGame);
+}
+ext3DLoadGate(a.el,startGame3D)
 });var P={'Arcade Classics':'var(--cat-arcade)',Reflex:'var(--cat-reflex)',Puzzle:'var(--cat-puzzle)','Board & Strategy':'#7BD88F','Cards & Words':'#F2A65A'},D=document.createElement('style');D.setAttribute('data-csa-ext',''),D.textContent=a.map(function(r){return'.cart[data-game='+r+']{--cat:'+P[t[r].category]+'}'}).join('')+'.category-nav button:nth-child(10){--navcat:#7BD88F}.category-nav button:nth-child(11){--navcat:#F2A65A}',document.head.appendChild(D)
 ;var O=['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],U=n.length,I=U<20?O[U]:['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'][Math.floor(U/10)]+(U%10?'-'+O[U%10].toLowerCase():''),W=document.querySelector('.console-screen p');W&&(W.textContent=W.textContent.replace(/^[A-Za-z-]+ signals/,I+' signals'))};

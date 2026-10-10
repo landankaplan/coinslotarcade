@@ -841,7 +841,8 @@ function startGame3D(){
 }
 ext3DLoadGate(r.el,startGame3D)
 }),w('fruitSlash',m,'Fruit Slash',o.green,'Chain slices for a combo bonus, snag the rare golden fruit, and dodge the bombs.','Drag / swipe across fruit · slice several in one swipe for a combo bonus · avoid the bombs · miss 3 and it is over',function(r){
-var W=400,H=420,ctx=r.canvas(W,H);
+function startGame3D(){
+var W=400,H=420;
 var fruitTypes=[
   {col:o.coral,pts:10,rad:22},
   {col:o.orange,pts:10,rad:22},
@@ -850,6 +851,85 @@ var fruitTypes=[
   {col:o.yellow,pts:15,rad:18}
 ];
 var fruits,halves,trail,livesLost,score,spawnTimer,elapsed,streak,bestStreak,swipeHits,dragging,lastPt,flash;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+r.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/420;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(W,H);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x0a1420,1);
+canvasWrap.appendChild(renderer3d.domElement);
+r.cv=renderer3d.domElement;r.w=W;r.h=H;
+
+var SCALE3d=20/W;
+var WH2=10*(H/W);
+function mapX3d(px2){return px2/W*20-10}
+function mapY3d(py){return WH2-py/H*(2*WH2)}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x0a1420,26,50);
+var camera3d=new THREE.PerspectiveCamera(60,W/H,0.1,200);
+camera3d.position.set(0,0,19.2);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xd9ecff,0.85));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.65);
+sun3d.position.set(6,10,16);
+scene3d.add(sun3d);
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c2=grp.children.pop();
+    grp.remove(c2);
+    extDisposeThree(c2)
+  }
+}
+var fruitGroup3d=new THREE.Group();scene3d.add(fruitGroup3d);
+var halfGroup3d=new THREE.Group();scene3d.add(halfGroup3d);
+var trailGroup3d=new THREE.Group();scene3d.add(trailGroup3d);
+
+var stemMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.green),roughness:0.6});
+var highlightMat3d=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.5});
+var bombMat3d=new THREE.MeshStandardMaterial({color:0x0b0518,roughness:0.5});
+var bombHeavyRingMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.magenta)});
+var fuseMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.orange),roughness:0.5});
+var sparkMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.yellow)});
+var goldRingMat3d=new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:0.85});
+var fleshMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.ink),roughness:0.7});
+var fruitMatCache3d={};
+function fruitMat(col){
+  if(!fruitMatCache3d[col])fruitMatCache3d[col]=new THREE.MeshStandardMaterial({color:new THREE.Color(col),roughness:0.5});
+  return fruitMatCache3d[col]
+}
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wy,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+    mesh.position.set(wx,wy,0.3);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
 function multiplier(){return 1+Math.min(4,Math.floor(streak/5));}
 function spawnOne(){
   var px=c(60,340);
@@ -880,9 +960,9 @@ function sliceSegment(p0,p1){
     if(Math.hypot(fr.x-px,fr.y-py)<fr.rad){
       fruits.splice(i,1);
       if(fr.bomb){
-        r.burst(fr.x,fr.y,o.coral,30);
+        spawnParticles3d(mapX3d(fr.x),mapY3d(fr.y),o.coral,30);
         flash=1;
-        render(.016);
+        render3d(.016);
         r.over(score,'You sliced a bomb! Score: '+score);
         return;
       }
@@ -893,7 +973,7 @@ function sliceSegment(p0,p1){
       mult=multiplier();
       chainBonus=hitsThisMove>1?1.5:1;
       score+=Math.round(fr.pts*mult*chainBonus);
-      r.burst(fr.x,fr.y,fr.col,fr.golden?26:14);
+      spawnParticles3d(mapX3d(fr.x),mapY3d(fr.y),fr.col,fr.golden?26:14);
       halves.push({x:fr.x,y:fr.y,vx:fr.vx-60,vy:.4*fr.vy,ang:0,va:-3,col:fr.col,side:0},
                   {x:fr.x,y:fr.y,vx:fr.vx+60,vy:.4*fr.vy,ang:0,va:3,col:fr.col,side:1});
     }
@@ -910,7 +990,7 @@ function step(dt){
     fr=fruits[i];
     fr.vy+=720*dt;fr.x+=fr.vx*dt;fr.y+=fr.vy*dt;
     if(fr.y>H+40&&fr.vy>0){
-      if(!fr.bomb){livesLost++;streak=0;r.burst(fr.x,H-10,o.coral,6);}
+      if(!fr.bomb){livesLost++;streak=0;spawnParticles3d(mapX3d(fr.x),mapY3d(H-10),o.coral,6);}
       fruits.splice(i,1);
     }
   }
@@ -920,37 +1000,79 @@ function step(dt){
     if(hv.y>H+40)halves.splice(i,1);
   }
   if(flash>0)flash=Math.max(0,flash-2*dt);
-  render(dt);
+  render3d(dt);
   if(livesLost>=3){r.over(score,'Too many got away. Score: '+score);}
 }
-function render(dt){
-  g(ctx,W,H);
-  if(flash>0){ctx.fillStyle='rgba(255,107,74,'+(.4*flash)+')';ctx.fillRect(0,0,W,H);}
+function render3d(dt){
+  disposeGroupChildren(fruitGroup3d);
   fruits.forEach(function(fr){
+    var wx=mapX3d(fr.x),wy=mapY3d(fr.y),wr=fr.rad*SCALE3d;
     if(fr.bomb){
-      d(ctx,fr.x,fr.y,fr.rad,'#0b0518');
-      ctx.strokeStyle=fr.heavy?o.magenta:o.dim;ctx.lineWidth=fr.heavy?3:2;ctx.stroke();
-      v(ctx,fr.x+6,fr.y-14,fr.x+12,fr.y-22,o.orange,3);
-      d(ctx,fr.x+12,fr.y-23,3,o.yellow);
+      var bomb=new THREE.Mesh(new THREE.SphereGeometry(wr,14,12),bombMat3d);
+      bomb.position.set(wx,wy,0);
+      fruitGroup3d.add(bomb);
+      if(fr.heavy){
+        var ring=new THREE.Mesh(new THREE.TorusGeometry(wr+0.06,0.03,6,16),bombHeavyRingMat3d);
+        ring.position.set(wx,wy,0);
+        fruitGroup3d.add(ring)
+      }
+      var fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,wr*0.6,5),fuseMat3d);
+      fuse.position.set(wx+wr*0.3,wy+wr*0.9,0);
+      fuse.rotation.z=-0.5;
+      fruitGroup3d.add(fuse);
+      var spark=new THREE.Mesh(new THREE.SphereGeometry(0.07,6,6),sparkMat3d);
+      spark.position.set(wx+wr*0.55,wy+wr*1.15,0);
+      fruitGroup3d.add(spark);
     }else{
-      d(ctx,fr.x,fr.y,fr.rad,fr.col);
-      d(ctx,fr.x-7,fr.y-7,5,'rgba(255,255,255,.35)');
-      v(ctx,fr.x,fr.y-fr.rad,fr.x+4,fr.y-fr.rad-8,o.green,3);
+      var body=new THREE.Mesh(new THREE.SphereGeometry(wr,14,12),fruitMat(fr.col));
+      body.position.set(wx,wy,0);
+      fruitGroup3d.add(body);
+      var hi=new THREE.Mesh(new THREE.SphereGeometry(wr*0.28,8,8),highlightMat3d);
+      hi.position.set(wx-wr*0.35,wy+wr*0.35,wr*0.6);
+      fruitGroup3d.add(hi);
+      var stem=new THREE.Mesh(new THREE.BoxGeometry(0.05,wr*0.5,0.05),stemMat3d);
+      stem.position.set(wx+wr*0.15,wy+wr+wr*0.2,0);
+      stem.rotation.z=0.3;
+      fruitGroup3d.add(stem);
       if(fr.golden){
-        ctx.strokeStyle='rgba(255,224,102,.85)';ctx.lineWidth=2;
-        ctx.beginPath();ctx.arc(fr.x,fr.y,fr.rad+5,0,e);ctx.stroke();
+        var gring=new THREE.Mesh(new THREE.TorusGeometry(wr+0.1,0.03,6,18),goldRingMat3d);
+        gring.position.set(wx,wy,0);
+        fruitGroup3d.add(gring)
       }
     }
   });
+
+  disposeGroupChildren(halfGroup3d);
   halves.forEach(function(hv){
-    ctx.save();ctx.translate(hv.x,hv.y);ctx.rotate(hv.ang);
-    ctx.beginPath();ctx.arc(0,0,22,hv.side?0:Math.PI,hv.side?Math.PI:e);ctx.closePath();
-    ctx.fillStyle=hv.col;ctx.fill();
-    ctx.beginPath();ctx.arc(0,0,15,hv.side?0:Math.PI,hv.side?Math.PI:e);ctx.closePath();
-    ctx.fillStyle=o.ink;ctx.fill();
-    ctx.restore();
+    var wx=mapX3d(hv.x),wy=mapY3d(hv.y);
+    var grp=new THREE.Group();
+    var skin=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8),fruitMat(hv.col));
+    skin.scale.set(1,1,0.4);
+    grp.add(skin);
+    var flesh=new THREE.Mesh(new THREE.CircleGeometry(0.33,10),fleshMat3d);
+    flesh.position.z=0.1;
+    grp.add(flesh);
+    grp.position.set(wx,wy,0);
+    grp.rotation.z=hv.ang;
+    grp.rotation.x=hv.side?0.35:-0.35;
+    halfGroup3d.add(grp)
   });
-  for(var i=1;i<trail.length;i++)v(ctx,trail[i-1].x,trail[i-1].y,trail[i].x,trail[i].y,'rgba(233,251,249,'+(i/trail.length)+')',2+.6*i);
+
+  disposeGroupChildren(trailGroup3d);
+  for(var ti=1;ti<trail.length;ti++){
+    var pA=trail[ti-1],pB=trail[ti];
+    var wxA=mapX3d(pA.x),wyA=mapY3d(pA.y),wxB=mapX3d(pB.x),wyB=mapY3d(pB.y);
+    var midx=(wxA+wxB)/2,midy=(wyA+wyB)/2;
+    var len=Math.hypot(wxB-wxA,wyB-wyA);
+    var mat=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink),transparent:true,opacity:ti/trail.length});
+    var seg=new THREE.Mesh(new THREE.BoxGeometry(len||0.01,0.07+0.02*ti,0.07),mat);
+    seg.position.set(midx,midy,0.4);
+    seg.rotation.z=Math.atan2(wyB-wyA,wxB-wxA);
+    trailGroup3d.add(seg)
+  }
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
   r.fxStep(dt);
   r.hud([['SCORE',y(score)],['MISSES',livesLost+'/3'],['COMBO','x'+multiplier()]]);
 }
@@ -964,15 +1086,193 @@ r.pointer({
   },
   up:function(){
     dragging=false;trail=[];
-    if(swipeHits>=3){score+=10*swipeHits;r.burst(200,200,o.yellow,20);}
+    if(swipeHits>=3){score+=10*swipeHits;spawnParticles3d(mapX3d(200),mapY3d(200),o.yellow,20);}
     swipeHits=0;
   }
+});
+r.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
 });
 r.begin(function(){
   fruits=[];halves=[];trail=[];livesLost=0;score=0;spawnTimer=.6;elapsed=0;streak=0;bestStreak=0;swipeHits=0;dragging=false;lastPt=null;flash=0;
   r.fx=[];
   r.frame(step);
 });
+}
+ext3DLoadGate(r.el,startGame3D)
 }),w('towerStack',m,'Tower Stack',o.blue,'Time each drop to land the sliding block squarely on the tower below.','Tap / click / Space to drop the block · perfect drops shrink the target as you climb',function(r){
-var W=320,H=480,BLOCK_H=22,BASE_Y=400,ctx=r.canvas(W,H);
-var blocks,current,dir,speed,fallingPieces,perfectStreak,bestStreak,hue,camY,settle
+function startGame3D(){
+var W=320,H=480,BLOCK_H=22,BASE_Y=400;
+var blocks,current,dir,speed,fallingPieces,perfectStreak,bestStreak,hue,camY,settled,score;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+r.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:320px;aspect-ratio:320/480;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(W,H);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x0d1424,1);
+canvasWrap.appendChild(renderer3d.domElement);
+r.cv=renderer3d.domElement;r.w=W;r.h=H;
+
+var SCALE3d=20/W;
+var WH2=10*(H/W);
+function mapX3d(px2){return px2/W*20-10}
+function mapY3d(py){return WH2-py/H*(2*WH2)}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x0d1424,30,60);
+var camera3d=new THREE.PerspectiveCamera(60,W/H,0.1,200);
+camera3d.position.set(0,0,27.4);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xd9e6ff,0.85));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.65);
+sun3d.position.set(8,12,16);
+scene3d.add(sun3d);
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c2=grp.children.pop();
+    grp.remove(c2);
+    extDisposeThree(c2)
+  }
+}
+var blockGroup3d=new THREE.Group();scene3d.add(blockGroup3d);
+var blockMatCache3d={};
+function blockMat(key,col,opacity){
+  var ck=key+col;
+  if(!blockMatCache3d[ck])blockMatCache3d[ck]=new THREE.MeshStandardMaterial({color:new THREE.Color(col),roughness:0.55});
+  return blockMatCache3d[ck]
+}
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wy,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),mat);
+    mesh.position.set(wx,wy,0.5);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.04+Math.random()*0.15;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,vz:(Math.random()-0.5)*0.1,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
+function blockScreenY(b){return BASE_Y-(b.i*BLOCK_H-camY)-BLOCK_H;}
+function nextBlock(){
+  var prev=blocks[blocks.length-1];
+  dir=blocks.length%2?1:-1;
+  current={x:dir>0?-.6*prev.w:W-.4*prev.w,w:prev.w,i:blocks.length};
+  speed=Math.min(420,140+7*blocks.length);
+}
+function dropBlock(){
+  if(settled)return;
+  var prev=blocks[blocks.length-1];
+  var left=Math.max(current.x,prev.x);
+  var right=Math.min(current.x+current.w,prev.x+prev.w);
+  var overlap=right-left;
+  if(overlap<=0){
+    fallingPieces.push({x:current.x,w:current.w,i:current.i,vy:0,dy:0});
+    settled=true;
+    spawnParticles3d(mapX3d(current.x+current.w/2),mapY3d(blockScreenY(current)),o.coral,16);
+    r.later(function(){r.over(score,'Tower height: '+(blocks.length-1)+' blocks - Score: '+score);},700);
+    return;
+  }
+  var tolerance=Math.max(2,10-Math.floor(blocks.length/2));
+  if(Math.abs(current.x-prev.x)<tolerance){
+    current.x=prev.x;
+    perfectStreak++;
+    bestStreak=Math.max(bestStreak,perfectStreak);
+    if(perfectStreak%3===0)current.w=Math.min(200,current.w+6);
+    score+=50+perfectStreak*10;
+    spawnParticles3d(mapX3d(current.x+current.w/2),mapY3d(blockScreenY(current)),o.yellow,16);
+  }else{
+    perfectStreak=0;
+    if(current.x<prev.x)fallingPieces.push({x:current.x,w:prev.x-current.x,i:current.i,vy:0,dy:0});
+    else fallingPieces.push({x:prev.x+prev.w,w:current.x+current.w-(prev.x+prev.w),i:current.i,vy:0,dy:0});
+    current.x=left;current.w=overlap;
+    score+=10;
+    spawnParticles3d(mapX3d(current.x+current.w/2),mapY3d(blockScreenY(current)),o.ink,10);
+  }
+  blocks.push(current);
+  nextBlock();
+}
+function update(dt){
+  if(!settled){
+    current.x+=dir*speed*dt;
+    if(current.x<-.6*current.w){current.x=-.6*current.w;dir=1;}
+    if(current.x>W-.4*current.w){current.x=W-.4*current.w;dir=-1;}
+  }
+  var targetCam=Math.max(0,(blocks.length-8)*BLOCK_H);
+  camY+=(targetCam-camY)*Math.min(1,4*dt);
+  fallingPieces.forEach(function(pc){pc.vy+=900*dt;pc.dy=(pc.dy||0)+pc.vy*dt;});
+  fallingPieces=fallingPieces.filter(function(pc){return pc.dy<600;});
+  render3d(dt);
+}
+function render3d(dt){
+  disposeGroupChildren(blockGroup3d);
+  blocks.forEach(function(b){
+    var sy=blockScreenY(b);
+    if(sy>-30&&sy<H){
+      var wcx=mapX3d(b.x+b.w/2),wcy=mapY3d(sy+(BLOCK_H-2)/2);
+      var mesh=new THREE.Mesh(new THREE.BoxGeometry(b.w*SCALE3d,(BLOCK_H-2)*SCALE3d,1.1),blockMat('b','hsl('+((hue+9*b.i)%360)+',70%,62%)'));
+      mesh.position.set(wcx,wcy,0);
+      blockGroup3d.add(mesh)
+    }
+  });
+  fallingPieces.forEach(function(pc){
+    var sy=BASE_Y-(pc.i*BLOCK_H-camY)-BLOCK_H+(pc.dy||0);
+    var wcx=mapX3d(pc.x+pc.w/2),wcy=mapY3d(sy+(BLOCK_H-2)/2);
+    var mesh=new THREE.Mesh(new THREE.BoxGeometry(pc.w*SCALE3d,(BLOCK_H-2)*SCALE3d,1.1),blockMat('f','hsl('+((hue+9*pc.i)%360)+',40%,45%)'));
+    mesh.position.set(wcx,wcy,0);
+    blockGroup3d.add(mesh)
+  });
+  if(!settled){
+    var sy2=blockScreenY(current);
+    var wcx2=mapX3d(current.x+current.w/2),wcy2=mapY3d(sy2+(BLOCK_H-2)/2);
+    var mesh2=new THREE.Mesh(new THREE.BoxGeometry(current.w*SCALE3d,(BLOCK_H-2)*SCALE3d,1.1),blockMat('c','hsl('+((hue+9*current.i)%360)+',80%,68%)'));
+    mesh2.position.set(wcx2,wcy2,0);
+    blockGroup3d.add(mesh2)
+  }
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
+  r.fxStep(dt);
+  r.hud([['HEIGHT',blocks.length-1],['SCORE',y(score)],['COMBO',perfectStreak]]);
+}
+r.press=function(k){if(k===' '||k==='Enter'||k==='ArrowDown')dropBlock();};
+r.pointer({down:dropBlock});
+r.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
+r.begin(function(){
+  blocks=[{x:60,w:200,i:0}];
+  fallingPieces=[];
+  perfectStreak=0;bestStreak=0;hue=f(360);camY=0;settled=false;score=0;
+  r.fx=[];
+  nextBlock();
+  r.frame(update);
+});
+}
+ext3DLoadGate(r.el,startGame3D)
+})

@@ -195,11 +195,87 @@ a.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRi
 a.opt('Difficulty',['Easy','Normal','Hard'],diff,function(i){diff=i;startGame();});
 a.begin(startGame);
 }),w('draughts',k,'Draughts',o.coral,'Hop diagonally, capture every jump on offer, and crown a king on the far row.','Click a piece then a highlighted square · captures are compulsory · beat the rival to move on',function(a){
-var CELLPX=46,PADX=16,PADY=62;
-var ctx=a.canvas(400,470);
+function startGame3D(){
+var CELLPX=46,PADX=16,PADY=62,W=400,H=470;
 var DIRS_ALL=[[-1,-1],[-1,1],[1,-1],[1,1]];
 var diff=1,DIFF=[{depth:1,rand:0.35},{depth:5,rand:0},{depth:7,rand:0}];
 var board,turn,over,score,wins,msg,keyNav,cursor,selected,legal,lastMove,noCapCount,aiDelay;
+
+var wrapDiv=document.createElement('div');
+wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+a.el.appendChild(wrapDiv);
+var canvasWrap=document.createElement('div');
+canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/470;margin:0 auto';
+wrapDiv.appendChild(canvasWrap);
+
+var renderer3d=extMakeWebGLRenderer();
+if(!renderer3d){a.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+renderer3d.setSize(W,H);
+renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+renderer3d.setClearColor(0x120a24,1);
+canvasWrap.appendChild(renderer3d.domElement);
+a.cv=renderer3d.domElement;a.w=W;a.h=H;
+
+var SCALE3d=20/W;
+var ZH2=H*SCALE3d/2;
+var camRatio3d=ZH2/9.375;
+function mapX3d(px2){return px2*SCALE3d-10}
+function mapZ3d(py){return py*SCALE3d-ZH2}
+
+var scene3d=new THREE.Scene();
+scene3d.fog=new THREE.Fog(0x120a24,24*camRatio3d,50*camRatio3d);
+var camera3d=new THREE.PerspectiveCamera(64,W/H,0.1,200);
+camera3d.position.set(0,16*camRatio3d,11*camRatio3d);
+camera3d.lookAt(0,0,0);
+
+scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.8));
+var sun3d=new THREE.DirectionalLight(0xffffff,0.7);
+sun3d.position.set(8,20,8);
+scene3d.add(sun3d);
+
+var boardTexCanvas=document.createElement('canvas');
+boardTexCanvas.width=W;boardTexCanvas.height=H;
+var ctx=boardTexCanvas.getContext('2d');
+var boardTexture=new THREE.CanvasTexture(boardTexCanvas);
+var floor3d=new THREE.Mesh(new THREE.PlaneGeometry(20,2*ZH2),new THREE.MeshStandardMaterial({map:boardTexture,roughness:0.9}));
+floor3d.rotation.x=-Math.PI/2;
+scene3d.add(floor3d);
+
+function disposeGroupChildren(grp){
+  while(grp.children.length){
+    var c2=grp.children.pop();
+    grp.remove(c2);
+    extDisposeThree(c2)
+  }
+}
+var pieceGroup3d=new THREE.Group();scene3d.add(pieceGroup3d);
+var mineMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.teal),emissive:new THREE.Color(o.teal),emissiveIntensity:0.25,roughness:0.45});
+var rivalMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.coral),emissive:new THREE.Color(o.coral),emissiveIntensity:0.25,roughness:0.45});
+var crownMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.yellow),emissive:new THREE.Color(o.yellow),emissiveIntensity:0.4,roughness:0.4});
+
+var particleMeshes3d=[];
+function spawnParticles3d(wx,wz,color,n){
+  var col=new THREE.Color(color);
+  for(var pi=0;pi<n;pi++){
+    var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+    var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+    mesh.position.set(wx,0.3,wz);
+    scene3d.add(mesh);
+    var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+    particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:0.04+Math.random()*0.1,vz:Math.sin(ang)*sp,life:1})
+  }
+}
+function stepParticles3d(dt){
+  for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+    var pt=particleMeshes3d[i2];
+    pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+    pt.vy-=0.01;
+    pt.life-=0.035;
+    pt.mesh.material.opacity=Math.max(0,pt.life);
+    if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+  }
+}
+
 function isMine(piece,player){return player===1?(piece===1||piece===2):(piece===3||piece===4);}
 function dirsFor(piece){
   if(piece===2||piece===4)return DIRS_ALL;
@@ -316,7 +392,7 @@ function finishGame(result){
     var gain=Math.round((140+25*wins)*(1+0.5*diff));
     score+=gain;wins++;
     msg='You win! (+'+gain+')';
-    a.burst(200,250,o.coral,40);
+    spawnParticles3d(mapX3d(200),mapZ3d(250),o.coral,40);
     a.later(newGame,1600);
   }else if(result===0){
     msg='Draw';
@@ -329,7 +405,7 @@ function finishGame(result){
 function commitMove(move){
   var piece=board[move.from];
   if(move.caps.length||piece===1||piece===3)noCapCount=0;else noCapCount++;
-  move.caps.forEach(function(c){a.burst(PADX+(c&7)*CELLPX+23,PADY+(c>>3)*CELLPX+23,turn===1?o.coral:o.teal,6);});
+  move.caps.forEach(function(c){spawnParticles3d(mapX3d(PADX+(c&7)*CELLPX+23),mapZ3d(PADY+(c>>3)*CELLPX+23),turn===1?o.coral:o.teal,6);});
   board=applyMove(board,move);
   lastMove=move;
   selected=-1;
@@ -374,11 +450,14 @@ function step(dt){
     aiDelay-=dt;
     if(aiDelay<=0){aiDelay=99;aiMove();}
   }
+  render3d(dt)
+}
+function render3d(dt){
   g(ctx,400,470);
   p(ctx,10,56,380,380,10,o.grid);
   var targets=[];
   if(selected>-1)legal.forEach(function(m){if(m.from===selected)targets.push(m.to);});
-  var mine=0,rival=0,i;
+  var mine=0,rival=0,i,pieceRenderList=[];
   for(i=0;i<64;i++){
     var cx=PADX+(i&7)*CELLPX,cy=PADY+(i>>3)*CELLPX,pc=board[i];
     p(ctx,cx,cy,CELLPX,CELLPX,2,((i&7)+(i>>3))%2?'#3a2f6b':'#241C47');
@@ -386,10 +465,7 @@ function step(dt){
     if(targets.indexOf(i)>-1)d(ctx,cx+23,cy+23,8,o.yellow);
     if(pc){
       pc<=2?mine++:rival++;
-      d(ctx,cx+23,cy+25,16.56,'rgba(0,0,0,.35)');
-      d(ctx,cx+23,cy+23,16.56,pc<=2?o.teal:o.coral);
-      d(ctx,cx+23,cy+23,11.04,'rgba(255,255,255,.12)');
-      if(pc===2||pc===4){C(ctx,cx+23,cy+23,9,5,-Math.PI/2);ctx.fillStyle=o.yellow;ctx.fill();}
+      pieceRenderList.push({cx:cx,cy:cy,pc:pc});
     }
     if(i===selected){ctx.strokeStyle=o.ink;ctx.lineWidth=3;r.L(ctx,cx+2,cy+2,42,42,6);ctx.stroke();}
   }
@@ -397,6 +473,24 @@ function step(dt){
   d(ctx,60,28,12,o.teal);x(ctx,mine,84,28,20,o.ink,'left');
   d(ctx,300,28,12,o.coral);x(ctx,rival,324,28,20,o.ink,'left');
   x(ctx,msg||(turn===1?(legal.length&&legal[0].caps.length?'You must capture':'Your move'):'Rival is thinking'),200,458,16,o.ink);
+  boardTexture.needsUpdate=true;
+
+  disposeGroupChildren(pieceGroup3d);
+  pieceRenderList.forEach(function(pr){
+    var isKing=pr.pc===2||pr.pc===4;
+    var mat=pr.pc<=2?mineMat3d:rivalMat3d;
+    var body=new THREE.Mesh(new THREE.CylinderGeometry(0.78,0.78,0.3,18),mat);
+    body.position.set(mapX3d(pr.cx+23),0.15,mapZ3d(pr.cy+23));
+    pieceGroup3d.add(body);
+    if(isKing){
+      var crown=new THREE.Mesh(new THREE.ConeGeometry(0.38,0.3,6),crownMat3d);
+      crown.position.set(mapX3d(pr.cx+23),0.46,mapZ3d(pr.cy+23));
+      pieceGroup3d.add(crown);
+    }
+  });
+
+  stepParticles3d(dt);
+  renderer3d.render(scene3d,camera3d);
   a.fxStep(dt);
   a.hud([['SCORE',y(score)],['WINS',wins]]);
 }
@@ -417,7 +511,15 @@ a.press=function(key){
 };
 a.pad([['◀','ArrowLeft'],['▲','ArrowUp'],['▼','ArrowDown'],['▶','ArrowRight'],['Select','Space']]);
 a.opt('Difficulty',['Easy','Normal','Hard'],diff,function(i){diff=i;startGame();});
+a.fns.push(function(){
+  scene3d.traverse(function(obj){extDisposeThree(obj)});
+  renderer3d.dispose();
+  if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+  if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+});
 a.begin(startGame);
+}
+ext3DLoadGate(a.el,startGame3D)
 }),w('seedSow',k,'Seed Sow',o.yellow,'Scoop a pit, sow seeds round the board, and bank more than your rival.','Click one of your pits (bottom row) or press 1-6 · end in your store to go again',function(a){
 var CANVAS_W=420,CANVAS_H=330;
 var ctx=a.canvas(CANVAS_W,CANVAS_H);
