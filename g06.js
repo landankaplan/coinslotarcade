@@ -1,127 +1,4 @@
-r+c(-9,9), tunnelW/2+14, H-tunnelW/2-14);
-    tunnelW = Math.max(112, 240-0.02*dist);
-    cave.push({t: nextCenter-tunnelW/2, b: nextCenter+tunnelW/2});
-  }
-
-  function speedFor(){ return Math.min(420, 150+0.02*dist); }
-
-  function step(dt){
-    var climbing = r.k[' '] || r.k.ArrowUp || r.k.w;
-    var spd = speedFor();
-    var idx, seg, gi, gt, oi, ot;
-
-    heliVel = s(heliVel + (climbing?-760:520)*dt, -280, 300);
-    heliY += heliVel*dt;
-    dist += spd*dt;
-    scrollAcc += spd*dt;
-    timeAcc += dt;
-    if(invuln>0) invuln -= dt;
-
-    while(scrollAcc>=10){
-      scrollAcc -= 10;
-      cave.shift();
-      pushSegment();
-    }
-
-    gates.forEach(function(gt){ gt.x -= spd*dt; if(gt.osc) gt.phase += dt*3; });
-    gates = gates.filter(function(gt){ return gt.x > -40; });
-
-    orbs.forEach(function(ob){ ob.x -= spd*dt; });
-    orbs = orbs.filter(function(ob){ return ob.x > -20 && !ob.taken; });
-
-    gateCd -= dt;
-    if(gateCd<=0){
-      seg = cave[cave.length-1];
-      var oscillate = dist>500 && Math.random()<0.4;
-      gates.push({x:410, y:c(seg.t+20, seg.b-80), w:22, h:60, scored:0, osc:oscillate, phase:0, baseY:0});
-      gates[gates.length-1].baseY = gates[gates.length-1].y;
-      gateCd = c(Math.max(150, 340-0.04*dist), Math.max(230, 460-0.04*dist));
-    }
-
-    orbCd -= dt;
-    if(orbCd<=0){
-      seg = cave[cave.length-1];
-      var kind = (!shield && Math.random()<0.22) ? 'shield' : 'fuel';
-      orbs.push({x:410, y:c(seg.t+16, seg.b-16), r:8, kind:kind, taken:0});
-      orbCd = c(2.2, 4.2);
-    }
-
-    // oscillating gates bob vertically
-    gates.forEach(function(gt){ if(gt.osc) gt.y = gt.baseY + Math.sin(gt.phase)*24; });
-
-    idx = s(Math.floor((90+scrollAcc)/10), 0, cave.length-1);
-    seg = cave[idx];
-
-    if(invuln<=0 && (heliY-8 < seg.t || heliY+8 > seg.b)){
-      if(shield>0){ shield=0; invuln=0.9; r.burst(heliX, heliY, o.blue, 20); }
-      else { r.burst(heliX, heliY, o.orange, 30); draw(dt); r.over(Math.floor(dist/10)+bonus, 'Distance '+Math.floor(dist/10)+' m · Score '+(Math.floor(dist/10)+bonus)); return; }
-    }
-
-    for(gi=0; gi<gates.length; gi++){
-      gt = gates[gi];
-      if(!gt.scored && gt.x+gt.w < heliX-8){ gt.scored=1; bonus += 10; r.burst(gt.x, gt.y+gt.h/2, o.magenta, 6); }
-      if(invuln<=0 && heliX+8 > gt.x && heliX-8 < gt.x+gt.w && heliY+8 > gt.y && heliY-8 < gt.y+gt.h){
-        if(shield>0){ shield=0; invuln=0.9; r.burst(heliX, heliY, o.blue, 20); }
-        else { r.burst(heliX, heliY, o.orange, 30); draw(dt); r.over(Math.floor(dist/10)+bonus, 'Distance '+Math.floor(dist/10)+' m · Score '+(Math.floor(dist/10)+bonus)); return; }
-      }
-    }
-
-    for(oi=orbs.length-1; oi>=0; oi--){
-      ot = orbs[oi];
-      if(Math.hypot(ot.x-heliX, ot.y-heliY) < ot.r+10){
-        ot.taken = 1;
-        if(ot.kind==='shield'){ shield = 1; r.burst(ot.x, ot.y, o.blue, 14); }
-        else { bonus += 15; r.burst(ot.x, ot.y, o.green, 10); }
-      }
-    }
-
-    draw(dt);
-  }
-
-  function draw(dt){
-    g(ctx, W, H);
-    ctx.fillStyle = '#3a2a7a';
-    ctx.beginPath(); ctx.moveTo(0,0);
-    cave.forEach(function(seg,i){ ctx.lineTo(10*i-scrollAcc, seg.t); });
-    ctx.lineTo(420,0); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(0,H);
-    cave.forEach(function(seg,i){ ctx.lineTo(10*i-scrollAcc, seg.b); });
-    ctx.lineTo(420,H); ctx.closePath(); ctx.fill();
-
-    gates.forEach(function(gt){ p(ctx, gt.x, gt.y, gt.w, gt.h, 4, gt.scored?o.dim:o.magenta); });
-    orbs.forEach(function(ob){
-      var pulse = 1+0.15*Math.sin(timeAcc*6+ob.x);
-      d(ctx, ob.x, ob.y, ob.r*pulse, ob.kind==='shield'?o.blue:o.green);
-      d(ctx, ob.x, ob.y, ob.r*0.4, o.ink);
-    });
-
-    ctx.save();
-    ctx.translate(heliX, heliY);
-    if(invuln>0 && Math.floor(invuln*16)%2) ctx.globalAlpha = 0.35;
-    ctx.rotate(heliVel/900);
-    p(ctx, -14, -7, 24, 14, 6, shield>0?o.blue:o.orange);
-    v(ctx, -14, 0, -22, -3, o.orange, 3);
-    v(ctx, -6, -10, 8, -10, o.ink, 2);
-    v(ctx, 1, -7, 1, -10, o.ink, 2);
-    p(ctx, 0, -5, 8, 6, 2, o.ink);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-
-    r.fxStep(dt);
-    r.hud([['SCORE', Math.floor(dist/10)+bonus], ['DIST', Math.floor(dist/10)+'m'], ['SHIELD', shield>0?'yes':'no']]);
-  }
-
-  r.pointer({down:function(){ r.k[' ']=1; }, up:function(){ delete r.k[' ']; }});
-  r.pad([['CLIMB','ArrowUp']]);
-  r.begin(function(){
-    var i;
-    cave = []; nextCenter = 180; tunnelW = 240; dist = 0; scrollAcc = 0; heliY = 180; heliVel = 0;
-    gates = []; orbs = []; gateCd = 500; orbCd = 3; heliX = 90; shield = 0; invuln = 0; bonus = 0; timeAcc = 0;
-    r.fx = [];
-    for(i=0;i<46;i++) pushSegment();
-    r.frame(step);
-  });
-}),w('skyHopper',b,'Sky Hopper',o.green,'Bounce from platform to platform, snag coins and dodge crumbling ledges and spikes.','Left/Right (or A/D) to steer · drag on mobile · avoid red spikes',function(r){
+,w('skyHopper',b,'Sky Hopper',o.green,'Bounce from platform to platform, snag coins and dodge crumbling ledges and spikes.','Left/Right (or A/D) to steer · drag on mobile · avoid red spikes',function(r){
 function startGame3D(){
   var WW=320, HH=480;
   var player, platforms, coins, worldCursor, heightScore, dragTarget, comboMult, comboTimer, bonusScore, ended;
@@ -719,9 +596,109 @@ function startGame3D(){
 ext3DLoadGate(r.el,startGame3D)
 }),
 w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critters and drop rocks on their heads for chained bonuses.','Arrows / WASD to dig · tap Space to pump the critter in front of you',function(r){
-  var CELL=25, COLS=16, ROWS=15, ctx=r.canvas(400,375);
+function startGame3D(){
+  var CELL=25, COLS=16, ROWS=15, W=400, H=375;
   var DIRS=[[0,-1],[-1,0],[0,1],[1,0]];
   var grid, player, enemies, rocks, lives, score, level, startFreeze, deathFreeze, timeAcc, comboMult, comboTimer, nextExtraLife;
+
+  var wrapDiv=document.createElement('div');
+  wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:10px';
+  r.el.appendChild(wrapDiv);
+  var canvasWrap=document.createElement('div');
+  canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/375;margin:0 auto';
+  wrapDiv.appendChild(canvasWrap);
+
+  var renderer3d=extMakeWebGLRenderer();
+  if(!renderer3d){r.fns.push(function(){if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)});return}
+  renderer3d.setSize(W,H);
+  renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';
+  renderer3d.setClearColor(0x0a0a1a,1);
+  canvasWrap.appendChild(renderer3d.domElement);
+  r.cv=renderer3d.domElement;r.w=W;r.h=H;
+
+  var SCALE3d=20/W;
+  var ZH2=H*SCALE3d/2;
+  function mapX3d(px2){return px2*SCALE3d-10}
+  function mapZ3d(py){return ZH2-py*SCALE3d}
+
+  var scene3d=new THREE.Scene();
+  scene3d.fog=new THREE.Fog(0x0a0a1a,22,46);
+  var camera3d=new THREE.PerspectiveCamera(48,W/H,0.1,200);
+  camera3d.position.set(0,16,11);
+  camera3d.lookAt(0,0,0);
+
+  scene3d.add(new THREE.AmbientLight(0xcfe9ff,0.8));
+  var sun3d=new THREE.DirectionalLight(0xffffff,0.7);
+  sun3d.position.set(8,20,8);
+  scene3d.add(sun3d);
+
+  var gridTexCanvas=document.createElement('canvas');
+  gridTexCanvas.width=W;gridTexCanvas.height=H;
+  var gridTexCtx=gridTexCanvas.getContext('2d');
+  var gridTexture=new THREE.CanvasTexture(gridTexCanvas);
+  gridTexture.flipY=false;
+  var floor3d=new THREE.Mesh(new THREE.PlaneGeometry(20,2*ZH2),new THREE.MeshStandardMaterial({map:gridTexture,roughness:0.9}));
+  floor3d.rotation.x=-Math.PI/2;
+  scene3d.add(floor3d);
+
+  function disposeGroupChildren(grp){
+    while(grp.children.length){
+      var c2=grp.children.pop();
+      grp.remove(c2);
+      extDisposeThree(c2)
+    }
+  }
+  var rockGroup3d=new THREE.Group();scene3d.add(rockGroup3d);
+  var enemyGroup3d=new THREE.Group();scene3d.add(enemyGroup3d);
+  var rockMat3d=new THREE.MeshStandardMaterial({color:0x9aa4b8,roughness:0.7});
+  var rockHiMat3d=new THREE.MeshStandardMaterial({color:0xc9d1e0,roughness:0.5});
+  var enemyInkMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.ink)});
+  var enemyBgMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.bg)});
+  var enemyYellowMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.yellow)});
+  var enemyKindMats3d={fy:new THREE.MeshStandardMaterial({color:new THREE.Color(o.green),emissive:new THREE.Color(o.green),emissiveIntensity:0.35,roughness:0.5,transparent:true}),
+    hd:new THREE.MeshStandardMaterial({color:new THREE.Color(o.violet),emissive:new THREE.Color(o.violet),emissiveIntensity:0.35,roughness:0.5,transparent:true}),
+    po:new THREE.MeshStandardMaterial({color:new THREE.Color(o.coral),emissive:new THREE.Color(o.coral),emissiveIntensity:0.35,roughness:0.5,transparent:true})};
+  var fireMat3d=new THREE.MeshBasicMaterial({color:0xff9636,transparent:true,opacity:0.85});
+
+  var playerGroup3d=new THREE.Group();
+  var playerBody3d=new THREE.Mesh(new THREE.SphereGeometry(0.5,10,10),enemyInkMat3d);
+  playerGroup3d.add(playerBody3d);
+  [-1,1].forEach(function(sgn){
+    var eye=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),enemyBgMat3d);
+    eye.position.set(sgn*0.15,0.1,0.42);
+    playerGroup3d.add(eye)
+  });
+  var playerHatMat3d=new THREE.MeshStandardMaterial({color:new THREE.Color(o.blue),emissive:new THREE.Color(o.blue),emissiveIntensity:0.3,roughness:0.5});
+  var playerHat3d=new THREE.Mesh(new THREE.BoxGeometry(18*SCALE3d,3*SCALE3d,6*SCALE3d),playerHatMat3d);
+  playerGroup3d.add(playerHat3d);
+  scene3d.add(playerGroup3d);
+
+  var pumpBeamMat3d=new THREE.MeshBasicMaterial({color:new THREE.Color(o.violet)});
+  var pumpBeam3d=new THREE.Mesh(new THREE.BoxGeometry(1,0.15,0.15),pumpBeamMat3d);
+  scene3d.add(pumpBeam3d);
+
+  var particleMeshes3d=[];
+  function spawnParticles3d(wx,wz,color,n){
+    var col=new THREE.Color(color);
+    for(var pi=0;pi<n;pi++){
+      var mat=new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1});
+      var mesh=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,6),mat);
+      mesh.position.set(wx,0.3,wz);
+      scene3d.add(mesh);
+      var ang=Math.random()*Math.PI*2,sp=0.05+Math.random()*0.17;
+      particleMeshes3d.push({mesh:mesh,vx:Math.cos(ang)*sp,vy:0.04+Math.random()*0.1,vz:Math.sin(ang)*sp,life:1})
+    }
+  }
+  function stepParticles3d(dt){
+    for(var i2=particleMeshes3d.length-1;i2>=0;i2--){
+      var pt=particleMeshes3d[i2];
+      pt.mesh.position.x+=pt.vx;pt.mesh.position.y+=pt.vy;pt.mesh.position.z+=pt.vz;
+      pt.vy-=0.01;
+      pt.life-=0.035;
+      pt.mesh.material.opacity=Math.max(0,pt.life);
+      if(pt.life<=0){scene3d.remove(pt.mesh);extDisposeThree(pt.mesh);particleMeshes3d.splice(i2,1)}
+    }
+  }
 
   function blocked(row,col){
     return row<0 || col<0 || row>=ROWS || col>=COLS || grid[row][col]>0 ||
@@ -768,7 +745,7 @@ w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critte
   function hitPlayer(){
     if(deathFreeze>0) return;
     lives--; deathFreeze = 1.3; comboMult = 1; comboTimer = 0;
-    r.burst(player.c*CELL+12, player.r*CELL+12, o.orange, 26);
+    spawnParticles3d(mapX3d(player.c*CELL+12), mapZ3d(player.r*CELL+12), o.orange, 26);
   }
 
   function step(dt){
@@ -780,7 +757,7 @@ w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critte
     if(deathFreeze>0){
       deathFreeze -= dt;
       if(deathFreeze<=0){
-        if(lives<=0){ draw(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
+        if(lives<=0){ render3d(dt); r.over(score, 'Level '+level+' · Score: '+score); return; }
         player = {r:0, c:8, d:[0,1], rx:200, ry:0, mt:0, pump:0, tgt:null};
         grid[1][8] = 0;
         enemies.forEach(function(en){
@@ -788,11 +765,11 @@ w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critte
         });
         startFreeze = 1;
       }
-      draw(dt);
+      render3d(dt);
       return;
     }
 
-    if(startFreeze>0){ startFreeze -= dt; draw(dt); return; }
+    if(startFreeze>0){ startFreeze -= dt; render3d(dt); return; }
 
     player.mt -= dt; player.pump -= dt;
     moveX = r.ax(); moveY = r.ay();
@@ -828,7 +805,7 @@ w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critte
         enemies = enemies.filter(function(en){
           if(en.r===rk.r && en.c===rk.c){
             addScore(1000+200*(level-1));
-            r.burst(en.c*CELL+12, en.r*CELL+12, o.yellow, 20);
+            spawnParticles3d(mapX3d(en.c*CELL+12), mapZ3d(en.r*CELL+12), o.yellow, 20);
             return false;
           }
           return true;
@@ -836,11 +813,180 @@ w('dirtDigger',b,'Dirt Digger',o.orange,'Tunnel through the dirt, inflate critte
       }
     }
     rocks = rocks.filter(function(rk){
-      if(rk.done){ r.burst(rk.c*CELL+12, rk.r*CELL+12, o.dim, 8); return false; }
+      if(rk.done){ spawnParticles3d(mapX3d(rk.c*CELL+12), mapZ3d(rk.r*CELL+12), o.dim, 8); return false; }
       return true;
     });
 
     for(ei=0; ei<enemies.length; ei++){
       en = enemies[ei];
       en.idle += dt;
-      i
+      if(en.inf>0 && en.idle>0.9) en.inf = Math.max(0, en.inf-0.9*dt);
+      en.stun -= dt;
+      if(en.fire>0){
+        en.fire -= dt;
+        if(player.r===en.r && Math.sign(player.c-en.c)===en.d[0] && Math.abs(player.c-en.c)<=3) hitPlayer();
+        continue;
+      }
+      if(en.tel>0){
+        en.tel -= dt;
+        if(en.tel<=0) en.fire = 0.6;
+        continue;
+      }
+      if(en.stun>0 || en.inf>0) continue;
+      en.mt -= dt;
+      if(en.kind==='fy'){
+        en.fcd -= dt;
+        if(en.fcd<=0 && en.r===player.r && Math.abs(player.c-en.c)<=3 && !blocked(en.r, en.c+Math.sign(player.c-en.c))){
+          en.d = [Math.sign(player.c-en.c), 0]; en.tel = 0.5; en.fcd = c(3,5);
+          continue;
+        }
+      }
+      if(en.mt<=0){
+        en.mt = Math.max(0.16, 0.34-0.02*level) * (en.ghost>0?1.4:1) * (en.kind==='hd'?1.3:1);
+        dirOptions = DIRS.filter(function(dd){
+          return en.ghost>0
+            ? (en.r+dd[1]>=0 && en.r+dd[1]<ROWS && en.c+dd[0]>=0 && en.c+dd[0]<COLS && !rocks.some(function(rk){ return rk.r===en.r+dd[1] && rk.c===en.c+dd[0]; }))
+            : !blocked(en.r+dd[1], en.c+dd[0]);
+        });
+        if(!dirOptions.length){ en.ghost = 2.5; continue; }
+        dirOptions.sort(function(dA,dB){
+          return Math.abs(en.r+dA[1]-player.r)+Math.abs(en.c+dA[0]-player.c) - (Math.abs(en.r+dB[1]-player.r)+Math.abs(en.c+dB[0]-player.c));
+        });
+        chosen = Math.random()<0.25 ? u(dirOptions) : dirOptions[0];
+        dist1 = Math.abs(en.r+chosen[1]-player.r)+Math.abs(en.c+chosen[0]-player.c);
+        dist2 = Math.abs(en.r-player.r)+Math.abs(en.c-player.c);
+        if(en.ghost<=0 && dist1>=dist2){
+          en.stuck += 0.5;
+          if(en.stuck>2.5){ en.ghost=3; en.stuck=0; }
+        } else if(en.ghost<=0){ en.stuck = Math.max(0, en.stuck-0.5); }
+        en.r += chosen[1]; en.c += chosen[0]; en.d = chosen;
+        if(en.ghost>0){
+          en.ghost -= 0.3;
+          if(en.ghost<=0.05 && grid[en.r][en.c]===0) en.ghost = 0;
+          if(en.ghost>0 && grid[en.r][en.c]===0 && en.ghost<1.6) en.ghost = 0;
+        }
+      }
+      if(en.r===player.r && en.c===player.c) hitPlayer();
+    }
+
+    if(!enemies.length){ level++; addScore(500); buildLevel(); }
+
+    render3d(dt);
+  }
+
+  function render3d(dt){
+    var row, col, wobbleShift, px, py;
+    gridTexCtx.fillStyle = '#1b2a55'; gridTexCtx.fillRect(0,0,W,H);
+    gridTexCtx.fillRect(0,0,W,CELL);
+    for(row=1; row<ROWS; row++){
+      for(col=0; col<COLS; col++){
+        gridTexCtx.fillStyle = grid[row][col] ? ['#8a5a2b','#7a4d24','#6a4020','#5a351b'][Math.floor(row/4)%4] : '#0d0820';
+        gridTexCtx.fillRect(col*CELL, row*CELL, CELL, CELL);
+      }
+    }
+    gridTexture.needsUpdate = true;
+
+    disposeGroupChildren(rockGroup3d);
+    rocks.forEach(function(rk){
+      wobbleShift = rk.c*CELL + (rk.wob>0 && !rk.fall ? 1.5*Math.sin(50*timeAcc) : 0);
+      var body=new THREE.Mesh(new THREE.BoxGeometry(21*SCALE3d,0.5,21*SCALE3d),rockMat3d);
+      body.position.set(mapX3d(wobbleShift+12.5), 0.3, mapZ3d(rk.r*CELL+12.5));
+      rockGroup3d.add(body);
+      var hi=new THREE.Mesh(new THREE.BoxGeometry(8*SCALE3d,0.2,4*SCALE3d),rockHiMat3d);
+      hi.position.set(mapX3d(wobbleShift+10), 0.56, mapZ3d(rk.r*CELL+7));
+      rockGroup3d.add(hi);
+    });
+
+    disposeGroupChildren(enemyGroup3d);
+    enemies.forEach(function(en){
+      var scale = 1+0.35*en.inf, cx = en.c*CELL+12.5, cy = en.r*CELL+12.5;
+      var mat = enemyKindMats3d[en.kind];
+      mat.opacity = en.ghost>0 ? 0.55 : 1;
+      var body=new THREE.Mesh(new THREE.SphereGeometry(0.36*scale,10,10),mat);
+      body.position.set(mapX3d(cx), 0.36*scale, mapZ3d(cy));
+      enemyGroup3d.add(body);
+      [-1,1].forEach(function(sgn){
+        var eye=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),enemyInkMat3d);
+        eye.position.set(mapX3d(cx+sgn*3*scale), 0.36*scale+0.08, mapZ3d(cy-2));
+        enemyGroup3d.add(eye);
+        var pupil=new THREE.Mesh(new THREE.SphereGeometry(0.05,6,6),enemyBgMat3d);
+        pupil.position.set(mapX3d(cx+sgn*3*scale+en.d[0]), 0.36*scale+0.08, mapZ3d(cy-2+en.d[1]));
+        enemyGroup3d.add(pupil);
+      });
+      if(en.tel>0 && Math.floor(12*en.tel)%2){
+        var tel=new THREE.Mesh(new THREE.SphereGeometry(0.16,6,6),enemyYellowMat3d);
+        tel.position.set(mapX3d(cx+10*en.d[0]), 0.4, mapZ3d(cy));
+        enemyGroup3d.add(tel);
+      }
+      if(en.fire>0){
+        var fx0=en.d[0]>0?cx+8:cx-8-75, fcx=fx0+37.5, fcy=cy-6+6;
+        var fire=new THREE.Mesh(new THREE.BoxGeometry(75*SCALE3d,0.3,12*SCALE3d),fireMat3d);
+        fire.position.set(mapX3d(fcx), 0.3, mapZ3d(fcy));
+        enemyGroup3d.add(fire);
+      }
+    });
+
+    var blink = deathFreeze<=0 || Math.floor(8*deathFreeze)%2;
+    playerGroup3d.visible = !!blink;
+    pumpBeam3d.visible = !!(blink && player.pump>0);
+    if(blink){
+      px = player.rx+12.5; py = player.ry+12.5;
+      playerGroup3d.position.set(mapX3d(px), 0.5, mapZ3d(py));
+      playerHat3d.position.set(0, 0.07, 0);
+      if(player.pump>0){
+        var ex=px+50*player.d[0], ey=py+50*player.d[1];
+        var wx0=mapX3d(px), wz0=mapZ3d(py), wx1=mapX3d(ex), wz1=mapZ3d(ey);
+        var mx=(wx0+wx1)/2, mz=(wz0+wz1)/2;
+        var len=Math.hypot(wx1-wx0,wz1-wz0);
+        var ang=Math.atan2(wz1-wz0,wx1-wx0);
+        pumpBeam3d.position.set(mx,0.4,mz);
+        pumpBeam3d.scale.set(len,1,1);
+        pumpBeam3d.rotation.y=-ang;
+      }
+    }
+
+    stepParticles3d(dt);
+    renderer3d.render(scene3d,camera3d);
+    r.hud([['SCORE',y(score)],['LEVEL',level],['LIVES',lives],['COMBO','x'+comboMult]]);
+  }
+
+  function tryPump(){
+    if(player.pump>0 || deathFreeze>0 || startFreeze>0) return;
+    var t, row, col, target;
+    for(t=1; t<=3; t++){
+      row = player.r+player.d[1]*t; col = player.c+player.d[0]*t;
+      if(blocked(row,col)) break;
+      target = enemies.filter(function(en){ return en.r===row && en.c===col && !en.ghost; })[0];
+      if(target){
+        target.inf++; target.stun = 1.4; target.idle = 0;
+        player.pump = 0.22; player.tgt = target;
+        spawnParticles3d(mapX3d(target.c*CELL+12), mapZ3d(target.r*CELL+12), o.ink, 4);
+        if(target.inf>=target.maxInf){
+          addScore((200+100*Math.floor(target.r/4)) * (target.maxInf/4));
+          spawnParticles3d(mapX3d(target.c*CELL+12), mapZ3d(target.r*CELL+12), target.kind==='fy'?o.green:o.coral, 22);
+          enemies.splice(enemies.indexOf(target),1);
+        }
+        return;
+      }
+    }
+    player.pump = 0.15;
+  }
+
+  r.press = function(key){ if(key===' ') tryPump(); };
+  r.pad([['▲','ArrowUp'],['◀','ArrowLeft'],['PUMP','Space'],['▶','ArrowRight'],['▼','ArrowDown']]);
+  r.fns.push(function(){
+    scene3d.traverse(function(obj){extDisposeThree(obj)});
+    renderer3d.dispose();
+    if(renderer3d.forceContextLoss)renderer3d.forceContextLoss();
+    if(wrapDiv&&wrapDiv.parentNode)wrapDiv.parentNode.removeChild(wrapDiv)
+  });
+
+  r.begin(function(){
+    lives = 3; score = 0; level = 1; timeAcc = 0; comboMult = 1; comboTimer = 0; nextExtraLife = 6000;
+    r.fx = [];
+    buildLevel();
+    r.frame(step);
+  });
+}
+ext3DLoadGate(r.el,startGame3D)
+})

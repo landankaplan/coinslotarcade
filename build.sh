@@ -29,7 +29,7 @@ fi
 # separate patch script every time Pellet Prowler's code changes.
 cat g01.js g02.js g03.js g04.js g05.js g06.js g07.js g08.js g09.js g10.js g11.js g12.js > public/games-ext.js
 EXT_SUM=$(md5sum public/games-ext.js | awk '{print $1}')
-if [ "$EXT_SUM" != "8be61763ea15e5f6a51a0dbd8d109b61" ]; then
+if [ "$EXT_SUM" != "34324387657de0783700a8244ce69e7f" ]; then
   echo "GAMES BUNDLE MISMATCH: got $EXT_SUM"
   exit 1
 fi
