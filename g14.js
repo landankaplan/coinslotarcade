@@ -25,6 +25,18 @@ function loadGate(el,startFn){var msg=document.createElement('div');msg.style.cs
 function makeRenderer(){var r2;try{r2=new THREE.WebGLRenderer({antialias:true,alpha:false})}catch(e){return null}r2.setPixelRatio(Math.min(window.devicePixelRatio||1,2));return r2}
 function disposeThree(obj){if(!obj)return;if(obj.geometry)obj.geometry.dispose();if(obj.material){if(Array.isArray(obj.material))obj.material.forEach(function(m){m.dispose()});else obj.material.dispose()}}
 
+/* ================= shared scene-dressing helpers (same technique as the site's own Snake/Brick Blitz
+   games: grid-line floor overlay, boxed rail framing, shadow-casting light, emissive glow accents, and
+   real 3D sphere particle bursts) so these games read as part of the same arcade look. ================= */
+function addGridLines(scene3d,w,d,y){var gridMat=new THREE.LineBasicMaterial({color:0x241c47,transparent:true,opacity:.75});var pts=[],hw=w/2,hd=d/2,gx,gz;for(gx=-hw;gx<=hw+.001;gx++)pts.push(gx,y,-hd,gx,y,hd);for(gz=-hd;gz<=hd+.001;gz++)pts.push(-hw,y,gz,hw,y,gz);var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));var ls=new THREE.LineSegments(geo,gridMat);scene3d.add(ls);return ls}
+function addFloor(scene3d,w,d,y,colorHex){var floor=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({color:colorHex!==undefined?colorHex:0x1c1640,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=y;floor.receiveShadow=true;scene3d.add(floor);return floor}
+function addRails(scene3d,w,d,y,colorHex){var wallMat=new THREE.MeshStandardMaterial({color:colorHex!==undefined?colorHex:0x2a2155,roughness:.8});var hw=w/2,hd=d/2;var r1=new THREE.Mesh(new THREE.BoxGeometry(w+.6,.4,.2),wallMat);r1.position.set(0,y+.2,-hd-.1);scene3d.add(r1);var r2=r1.clone();r2.material=wallMat;r2.position.z=hd+.1;scene3d.add(r2);var r3=new THREE.Mesh(new THREE.BoxGeometry(.2,.4,d+.6),wallMat);r3.position.set(-hw-.1,y+.2,0);scene3d.add(r3);var r4=r3.clone();r4.material=wallMat;r4.position.x=hw+.1;scene3d.add(r4);return[r1,r2,r3,r4]}
+function glowOrbs(scene3d,ptsArr,colorNum){var arr=[];ptsArr.forEach(function(p){var m=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.5,roughness:.4}));m.position.set(p[0],p[1],p[2]);scene3d.add(m);arr.push(m)});return arr}
+function makeParticlePool(){return[]}
+function burst3d(scene3d,pool,x,y,z,color,n){var c=new THREE.Color(color);for(var i=0;i<(n||16);i++){var mat=new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:1});var mesh=new THREE.Mesh(new THREE.SphereGeometry(.09,6,6),mat);mesh.position.set(x,y,z);scene3d.add(mesh);var a=Math.random()*Math.PI*2,sp=.06+Math.random()*.14;pool.push({mesh:mesh,vx:Math.cos(a)*sp,vy:.1+Math.random()*.1,vz:Math.sin(a)*sp,life:1})}}
+function stepParticles3d(scene3d,pool){for(var i=pool.length-1;i>=0;i--){var p=pool[i];p.vy-=.012;p.mesh.position.x+=p.vx;p.mesh.position.y+=p.vy;p.mesh.position.z+=p.vz;p.life-=.035;p.mesh.material.opacity=Math.max(0,p.life);if(p.life<=0){scene3d.remove(p.mesh);disposeThree(p.mesh);pool.splice(i,1)}}}
+function enableShadows(renderer3d,sun){renderer3d.shadowMap.enabled=true;sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.near=1;sun.shadow.camera.far=30;sun.shadow.camera.left=-8;sun.shadow.camera.right=8;sun.shadow.camera.top=8;sun.shadow.camera.bottom=-8}
+
 /* mount-API kit, mirroring edu.js's kit()/def() and g13.js's -- the proven working pattern */
 var ARROWS=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '];
 function kit(id,el,x){
@@ -69,7 +81,8 @@ function setup3D(G,maxW,aspectH,bg){
   var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:'+maxW+'px;aspect-ratio:'+maxW+'/'+Math.round(maxW*aspectH)+';margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
   function resize(){var W=canvasWrap.clientWidth||maxW,H=W*aspectH;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
   var sz=resize();renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';canvasWrap.appendChild(renderer3d.domElement);G.cv=renderer3d.domElement;G.w=sz[0];G.h=sz[1];
-  scene3d.add(new THREE.AmbientLight(0xffffff,.75));var sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(4,8,5);scene3d.add(sun);
+  scene3d.add(new THREE.AmbientLight(0xcfe9ff,.65));var sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(4,8,5);scene3d.add(sun);
+  enableShadows(renderer3d,sun);
   G.fns.push(function(){scene3d.traverse(function(o){disposeThree(o)});renderer3d.dispose()});
   return{scene:scene3d,camera:camera3d,renderer:renderer3d,wrapDiv:wrapDiv,canvasWrap:canvasWrap,resize:function(){var s=resize();G.w=s[0];G.h=s[1];return s},maxResizeCheck:function(){var w2=canvasWrap.clientWidth;if(w2&&Math.abs(w2-G.w)>4)this.resize()}};
 }
@@ -79,16 +92,23 @@ function dropConnect3d(id,cfg){
   def(id,cfg.title,cfg.color,cfg.tagline,'Click a column button (or press 1-'+cfg.cols+') to drop a piece · get '+cfg.winLen+' in a row to win',function(G){
     loadGate(G.el,function(){
       var ROWS=cfg.rows,COLS=cfg.cols,WIN=cfg.winLen;
-      var S3=setup3D(G,360,1.05,0x0d1530);if(!S3)return;
+      var S3=setup3D(G,400,1.05,0x0d1530);if(!S3)return;
       var scene=S3.scene,camera=S3.camera;
-      camera.position.set(0,ROWS*.55,COLS*.85);camera.lookAt(0,ROWS*.3,0);
+      camera.position.set(0,ROWS*.68,COLS*.98);camera.lookAt(0,ROWS*.36,0);
       var frame=new THREE.Mesh(new THREE.BoxGeometry(COLS*.92+.3,ROWS*.92+.3,.18),new THREE.MeshStandardMaterial({color:0x241c47}));
-      frame.position.set(0,ROWS*.46,-.3);scene.add(frame);
-      var p1Col=parseInt(cfg.color.replace('#','0x')),p2Col=0xff6b4a;
+      frame.position.set(0,ROWS*.46,-.3);frame.receiveShadow=true;scene.add(frame);
+      var colorNum0=parseInt(cfg.color.replace('#','0x'));
+      var fhw=COLS*.46+.15,ftop=ROWS*.92+.15,fbot=-.15;
+      var standFloor=new THREE.Mesh(new THREE.PlaneGeometry(COLS*1.3+3,3),new THREE.MeshStandardMaterial({color:0x1c1640,roughness:.95}));
+      standFloor.rotation.x=-Math.PI/2;standFloor.position.set(0,fbot-.02,.9);standFloor.receiveShadow=true;scene.add(standFloor);
+      (function(){var gridMat=new THREE.LineBasicMaterial({color:0x3a2f78,transparent:true,opacity:.9});var pts=[],hw=(COLS*1.3+3)/2,z0=.9-1.5,z1=.9+1.5,gx,gz;for(gx=-hw;gx<=hw+.001;gx+=.85)pts.push(gx,fbot-.01,z0,gx,fbot-.01,z1);for(gz=z0;gz<=z1+.001;gz+=.85)pts.push(-hw,fbot-.01,gz,hw,fbot-.01,gz);var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));scene.add(new THREE.LineSegments(geo,gridMat))})();
+      glowOrbs(scene,[[-fhw,ftop,-.25],[fhw,ftop,-.25],[-fhw,fbot,-.25],[fhw,fbot,-.25]],colorNum0);
+      var particles=makeParticlePool();
+      var p1Col=colorNum0,p2Col=0xff6b4a;
       var board,turn,ended,moves,pieceMeshes,dropping;
       function cellX(c){return(c-(COLS-1)/2)*.92}
       function cellY(r){return(ROWS-1-r)*.92+.46}
-      function makePiece(colorNum){var m=new THREE.Mesh(new THREE.SphereGeometry(.38,20,16),new THREE.MeshStandardMaterial({color:colorNum,metalness:.25,roughness:.5}));scene.add(m);return m}
+      function makePiece(colorNum){var m=new THREE.Mesh(new THREE.SphereGeometry(.38,20,16),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.2,metalness:.25,roughness:.5}));m.castShadow=true;scene.add(m);return m}
       function legalCols(){var a=[];for(var c=0;c<COLS;c++)if(board[0][c]===0)a.push(c);return a}
       function dropRow(c){for(var r=ROWS-1;r>=0;r--)if(board[r][c]===0)return r;return -1}
       function checkWin(b,who){
@@ -123,7 +143,7 @@ function dropConnect3d(id,cfg){
         place(best,2,afterAiMove);
       }
       function afterAiMove(){
-        if(checkWin(board,2)){ended=!0;updateMsg('The house wins. Try again!',R.coral);G.later(function(){G.over(moves*5,'The house connected '+WIN+'. Moves: '+moves)},900);return}
+        if(checkWin(board,2)){ended=!0;updateMsg('The house wins. Try again!',R.coral);burst3d(scene,particles,0,ROWS*.5,0,0xff6b4a,22);G.later(function(){G.over(moves*5,'The house connected '+WIN+'. Moves: '+moves)},900);return}
         if(boardFull()){ended=!0;updateMsg('Board full — draw.',R.dim);G.later(function(){G.over(50+moves*5,'Draw after '+moves+' moves')},900);return}
         turn=1;updateMsg('Your turn',cfg.color);updateHud();refreshButtons();
       }
@@ -137,7 +157,7 @@ function dropConnect3d(id,cfg){
       function userMove(c){
         if(ended||turn!==1||dropping)return;
         if(!place(c,1,function(){
-          if(checkWin(board,1)){ended=!0;updateMsg('You win!',R.green);G.burst(G.w/2,G.h/2,R.green,24);G.later(function(){G.over(100+moves*5,'You connected '+WIN+' in '+moves+' moves!','You Win!')},900);return}
+          if(checkWin(board,1)){ended=!0;updateMsg('You win!',R.green);burst3d(scene,particles,0,ROWS*.5,0,0x3ddc97,28);G.later(function(){G.over(100+moves*5,'You connected '+WIN+' in '+moves+' moves!','You Win!')},900);return}
           if(boardFull()){ended=!0;updateMsg('Board full — draw.',R.dim);G.later(function(){G.over(50+moves*5,'Draw after '+moves+' moves')},900);return}
           moves++;turn=2;updateMsg('House thinking…',R.dim);updateHud();refreshButtons();G.later(aiMove,500);
         }))return;
@@ -147,6 +167,7 @@ function dropConnect3d(id,cfg){
       S3.wrapDiv.appendChild(msgDiv);S3.wrapDiv.appendChild(btnRow);
       function tick(dt){
         if(dropping){dropping.vy+=dt*9;dropping.mesh.position.y-=dropping.vy;if(dropping.mesh.position.y<=dropping.targetY){dropping.mesh.position.y=dropping.targetY;dropping=null}}
+        stepParticles3d(scene,particles);
         S3.maxResizeCheck();
         S3.renderer.render(S3.scene,S3.camera);
       }
@@ -175,11 +196,15 @@ function flipGrid3d(id,cfg){
       var scene=S3.scene,camera=S3.camera;
       camera.position.set(0,N*.95,N*.78);camera.lookAt(0,0,0);
       var boardMesh=new THREE.Mesh(new THREE.BoxGeometry(N*.86,.16,N*.86),new THREE.MeshStandardMaterial({color:0x0f1a38,metalness:.2,roughness:.85}));
-      boardMesh.position.y=-.1;scene.add(boardMesh);
+      boardMesh.position.y=-.1;boardMesh.receiveShadow=true;scene.add(boardMesh);
       var p1Col=parseInt(cfg.color.replace('#','0x')),p2Col=0xff6b4a;
+      addGridLines(scene,N*.86,N*.86,-.015);
+      addRails(scene,N*.86,N*.86,-.1,0x2a2155);
+      glowOrbs(scene,[[-N*.43,.02,-N*.43],[N*.43,.02,-N*.43],[-N*.43,.02,N*.43],[N*.43,.02,N*.43]],p1Col);
+      var particles=makeParticlePool();
       var board,turn,ended,discMeshes;
       function cellPos(r,c){return[(c-(N-1)/2)*.82,(r-(N-1)/2)*.82]}
-      function makeDisc(r,c,who){var m=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.12,20),new THREE.MeshStandardMaterial({color:who===1?p1Col:p2Col,metalness:.3,roughness:.4}));var xz=cellPos(r,c);m.position.set(xz[0],.06,xz[1]);scene.add(m);discMeshes[r][c]=m;return m}
+      function makeDisc(r,c,who){var dc=who===1?p1Col:p2Col;var m=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.12,20),new THREE.MeshStandardMaterial({color:dc,emissive:dc,emissiveIntensity:.2,metalness:.3,roughness:.4}));var xz=cellPos(r,c);m.position.set(xz[0],.06,xz[1]);m.castShadow=true;scene.add(m);discMeshes[r][c]=m;return m}
       var DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
       function inB(r,c){return r>=0&&r<N&&c>=0&&c<N}
       function flipsFor(b,r,c,who){
@@ -220,6 +245,7 @@ function flipGrid3d(id,cfg){
           ended=!0;var s1=score(1),s2=score(2);
           var win=s1>s2;
           updateMsg(win?'You win '+s1+'-'+s2+'!':s1===s2?'Tied '+s1+'-'+s2:'House wins '+s2+'-'+s1,win?R.green:R.coral);
+          burst3d(scene,particles,0,.3,0,win?0x3ddc97:0xff6b4a,win?26:18);
           G.later(function(){G.over(win?150+s1*2:(s1===s2?60:s1*2),'Final: you '+s1+' · house '+s2,win?'You Win!':'Game Over')},900);
           return true;
         }
@@ -254,7 +280,7 @@ function flipGrid3d(id,cfg){
         G.later(aiTurn,500);
       }
       S3.wrapDiv.appendChild(msgDiv);S3.wrapDiv.appendChild(gridDiv);
-      function tick(dt){S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
+      function tick(dt){stepParticles3d(scene,particles);S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
       G.begin(function(){
         board=[];discMeshes=[];for(var r=0;r<N;r++){var row=[],mrow=[];for(var c=0;c<N;c++){row.push(0);mrow.push(null)}board.push(row);discMeshes.push(mrow)}
         var mid=N/2;
@@ -281,15 +307,19 @@ function nimStones3d(id,cfg){
       var scene=S3.scene,camera=S3.camera;
       var n=piles0.length;
       camera.position.set(0,5,n*1.6+2);camera.lookAt(0,1.5,0);
-      var floor=new THREE.Mesh(new THREE.PlaneGeometry(n*2+4,10),new THREE.MeshStandardMaterial({color:0x0a1020,metalness:.2,roughness:.9}));
-      floor.rotation.x=-Math.PI/2;floor.position.y=-.2;scene.add(floor);
+      var floor=new THREE.Mesh(new THREE.PlaneGeometry(n*2+4,10),new THREE.MeshStandardMaterial({color:0x1c1640,metalness:.2,roughness:.9}));
+      floor.rotation.x=-Math.PI/2;floor.position.y=-.2;floor.receiveShadow=true;scene.add(floor);
       var colorNum=parseInt(cfg.color.replace('#','0x'));
+      addGridLines(scene,n*2+4,10,-.19);
+      addRails(scene,n*1.6+2.4,8,-.2,0x2a2155);
+      glowOrbs(scene,[[-(n*1.6+2.4)/2+.3,.1,0],[(n*1.6+2.4)/2-.3,.1,0]],colorNum);
+      var particles=makeParticlePool();
       var piles,ended,turn,stoneMeshes;
       function pileX(i){return(i-(n-1)/2)*1.6}
       function rebuildMeshes(){
         stoneMeshes.forEach(function(arr){arr.forEach(function(m){scene.remove(m);disposeThree(m)})});
         stoneMeshes=[];
-        for(var i=0;i<n;i++){var arr=[];for(var s=0;s<piles[i];s++){var m=new THREE.Mesh(new THREE.BoxGeometry(.7,.42,.7),new THREE.MeshStandardMaterial({color:colorNum,metalness:.15,roughness:.6}));m.position.set(pileX(i),.21+s*.46,0);scene.add(m);arr.push(m)}stoneMeshes.push(arr)}
+        for(var i=0;i<n;i++){var arr=[];for(var s=0;s<piles[i];s++){var m=new THREE.Mesh(new THREE.BoxGeometry(.7,.42,.7),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.15,metalness:.15,roughness:.6}));m.position.set(pileX(i),.21+s*.46,0);m.castShadow=true;scene.add(m);arr.push(m)}stoneMeshes.push(arr)}
       }
       var pilesDiv=document.createElement('div');pilesDiv.style.cssText='display:flex;gap:14px;justify-content:center;width:100%;max-width:380px;align-items:flex-end;';
       var pileCols=[];
@@ -321,8 +351,8 @@ function nimStones3d(id,cfg){
       function checkEndAfter(moverWasPlayer){
         if(totalStones()===0){
           ended=!0;
-          if(moverWasPlayer){updateMsg('You took the last stone — you win!',R.green);G.later(function(){G.over(150,'You took the last stone!','You Win!')},800)}
-          else{updateMsg('House took the last stone. Try again!',R.coral);G.later(function(){G.over(30,'The house took the last stone.')},800)}
+          if(moverWasPlayer){updateMsg('You took the last stone — you win!',R.green);burst3d(scene,particles,0,1.5,0,0x3ddc97,26);G.later(function(){G.over(150,'You took the last stone!','You Win!')},800)}
+          else{updateMsg('House took the last stone. Try again!',R.coral);burst3d(scene,particles,0,1.5,0,0xff6b4a,18);G.later(function(){G.over(30,'The house took the last stone.')},800)}
           return true;
         }
         return false;
@@ -351,7 +381,7 @@ function nimStones3d(id,cfg){
         G.later(aiMove,600);
       }
       S3.wrapDiv.appendChild(msgDiv);S3.wrapDiv.appendChild(pilesDiv);
-      function tick(dt){S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
+      function tick(dt){stepParticles3d(scene,particles);S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
       G.begin(function(){
         piles=piles0.slice();stoneMeshes=[];
         rebuildMeshes();

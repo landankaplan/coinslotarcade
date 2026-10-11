@@ -41,7 +41,7 @@ echo "Bundle OK: $EXT_SUM"
 # is fully closed by the end of g12.js. Adds cardDuel3d x8 + wordReveal3d x7, bringing
 # Cards & Words from 5 to 20 games. Checksum + syntax gated like the base bundle. ---
 G13_SUM=$(md5sum g13.js | awk '{print $1}')
-if [ "$G13_SUM" != "41cec52f656c13ee27f2d9069a4a790f" ]; then
+if [ "$G13_SUM" != "bd28b262e2b2fc1f190a5794b83fe3c3" ]; then
   echo "G13 BUNDLE MISMATCH: got $G13_SUM"
   exit 1
 fi
@@ -54,7 +54,7 @@ echo "Cards & Words extras OK: $G13_SUM"
 # --- Board & Strategy v2 extras (g14.js): same chain/wrap pattern as g13.js. Adds
 # dropConnect3d x5 + flipGrid3d x4 + nimStones3d x4, bringing Board & Strategy from 7 to 20. ---
 G14_SUM=$(md5sum g14.js | awk '{print $1}')
-if [ "$G14_SUM" != "f4d47ea5b01b7ec48b85a2731995a588" ]; then
+if [ "$G14_SUM" != "e56ea2212af6cb35a1cf36097379d032" ]; then
   echo "G14 BUNDLE MISMATCH: got $G14_SUM"
   exit 1
 fi
@@ -67,7 +67,7 @@ echo "Board & Strategy extras OK: $G14_SUM"
 # --- Reflex v2 extras (g15.js): same chain/wrap pattern. Adds popTarget3d x4 + fallCatch3d x4,
 # bringing Reflex from 12 to 20. ---
 G15_SUM=$(md5sum g15.js | awk '{print $1}')
-if [ "$G15_SUM" != "1a6b07e4bfb6462b0989a61725f0ee83" ]; then
+if [ "$G15_SUM" != "f5952514780bad3f9e3dd7510d0de30f" ]; then
   echo "G15 BUNDLE MISMATCH: got $G15_SUM"
   exit 1
 fi
@@ -80,7 +80,7 @@ echo "Reflex extras OK: $G15_SUM"
 # --- Sports v2 extras (g16.js): same chain/wrap pattern. Adds aimTarget3d x5 + railSport3d x2,
 # bringing Sports from 13 to 20. ---
 G16_SUM=$(md5sum g16.js | awk '{print $1}')
-if [ "$G16_SUM" != "0042e4f1e576d2a1b2f3081102d84eec" ]; then
+if [ "$G16_SUM" != "1959d06c5e7f9dce27d8f3bbb9ea795b" ]; then
   echo "G16 BUNDLE MISMATCH: got $G16_SUM"
   exit 1
 fi
@@ -94,7 +94,7 @@ echo "Sports extras OK: $G16_SUM"
 # + pathConnect3d x1 + numberChain3d x1, bringing Puzzle from 16 to 20 -- the last of the 9
 # categories brought up to 20 games. ---
 G17_SUM=$(md5sum g17.js | awk '{print $1}')
-if [ "$G17_SUM" != "cc9173367a8f87a36821dec8678b8dc2" ]; then
+if [ "$G17_SUM" != "6a169d4c1207684f92051c010bef335f" ]; then
   echo "G17 BUNDLE MISMATCH: got $G17_SUM"
   exit 1
 fi

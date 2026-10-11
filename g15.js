@@ -24,6 +24,16 @@ function loadGate(el,startFn){var msg=document.createElement('div');msg.style.cs
 function makeRenderer(){var r2;try{r2=new THREE.WebGLRenderer({antialias:true,alpha:false})}catch(e){return null}r2.setPixelRatio(Math.min(window.devicePixelRatio||1,2));return r2}
 function disposeThree(obj){if(!obj)return;if(obj.geometry)obj.geometry.dispose();if(obj.material){if(Array.isArray(obj.material))obj.material.forEach(function(m){m.dispose()});else obj.material.dispose()}}
 
+/* ================= shared scene-dressing helpers (grid floor, rails, glow, 3D particle bursts, shadows) ================= */
+function addGridLines(scene3d,w,d,y){var gridMat=new THREE.LineBasicMaterial({color:0x3a2f78,transparent:true,opacity:.85});var pts=[],hw=w/2,hd=d/2,gx,gz;for(gx=-hw;gx<=hw+.001;gx++)pts.push(gx,y,-hd,gx,y,hd);for(gz=-hd;gz<=hd+.001;gz++)pts.push(-hw,y,gz,hw,y,gz);var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));var ls=new THREE.LineSegments(geo,gridMat);scene3d.add(ls);return ls}
+function addFloor(scene3d,w,d,y,colorHex){var floor=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({color:colorHex!==undefined?colorHex:0x1c1640,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.position.y=y;floor.receiveShadow=true;scene3d.add(floor);return floor}
+function addRails(scene3d,w,d,y,colorHex){var wallMat=new THREE.MeshStandardMaterial({color:colorHex!==undefined?colorHex:0x2a2155,roughness:.8});var hw=w/2,hd=d/2;var r1=new THREE.Mesh(new THREE.BoxGeometry(w+.6,.4,.2),wallMat);r1.position.set(0,y+.2,-hd-.1);scene3d.add(r1);var r2=r1.clone();r2.material=wallMat;r2.position.z=hd+.1;scene3d.add(r2);var r3=new THREE.Mesh(new THREE.BoxGeometry(.2,.4,d+.6),wallMat);r3.position.set(-hw-.1,y+.2,0);scene3d.add(r3);var r4=r3.clone();r4.material=wallMat;r4.position.x=hw+.1;scene3d.add(r4);return[r1,r2,r3,r4]}
+function glowOrbs(scene3d,ptsArr,colorNum){var arr=[];ptsArr.forEach(function(p){var m=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.5,roughness:.4}));m.position.set(p[0],p[1],p[2]);scene3d.add(m);arr.push(m)});return arr}
+function makeParticlePool(){return[]}
+function burst3d(scene3d,pool,x,y,z,color,n){var c=new THREE.Color(color);for(var i=0;i<(n||16);i++){var mat=new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:1});var mesh=new THREE.Mesh(new THREE.SphereGeometry(.09,6,6),mat);mesh.position.set(x,y,z);scene3d.add(mesh);var a=Math.random()*Math.PI*2,sp=.06+Math.random()*.14;pool.push({mesh:mesh,vx:Math.cos(a)*sp,vy:.1+Math.random()*.1,vz:Math.sin(a)*sp,life:1})}}
+function stepParticles3d(scene3d,pool){for(var i=pool.length-1;i>=0;i--){var p=pool[i];p.vy-=.012;p.mesh.position.x+=p.vx;p.mesh.position.y+=p.vy;p.mesh.position.z+=p.vz;p.life-=.035;p.mesh.material.opacity=Math.max(0,p.life);if(p.life<=0){scene3d.remove(p.mesh);disposeThree(p.mesh);pool.splice(i,1)}}}
+function enableShadows(renderer3d,sun){renderer3d.shadowMap.enabled=true;sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.near=1;sun.shadow.camera.far=30;sun.shadow.camera.left=-8;sun.shadow.camera.right=8;sun.shadow.camera.top=8;sun.shadow.camera.bottom=-8}
+
 var ARROWS=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '];
 function kit(id,el,x){
   var G={id:id,el:el,x:x,k:{},dead:false,fns:[],rid:0,last:0,run:null,fx:[],press:null,again:null};
@@ -66,7 +76,8 @@ function setup3D(G,maxW,aspectH,bg){
   var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:'+maxW+'px;aspect-ratio:'+maxW+'/'+Math.round(maxW*aspectH)+';margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
   function resize(){var W=canvasWrap.clientWidth||maxW,H=W*aspectH;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
   var sz=resize();renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';canvasWrap.appendChild(renderer3d.domElement);G.cv=renderer3d.domElement;G.w=sz[0];G.h=sz[1];
-  scene3d.add(new THREE.AmbientLight(0xffffff,.75));var sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(4,8,5);scene3d.add(sun);
+  scene3d.add(new THREE.AmbientLight(0xcfe9ff,.65));var sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(4,8,5);scene3d.add(sun);
+  enableShadows(renderer3d,sun);
   G.fns.push(function(){scene3d.traverse(function(o){disposeThree(o)});renderer3d.dispose()});
   return{scene:scene3d,camera:camera3d,renderer:renderer3d,wrapDiv:wrapDiv,canvasWrap:canvasWrap,resize:function(){var s=resize();G.w=s[0];G.h=s[1];return s},maxResizeCheck:function(){var w2=canvasWrap.clientWidth;if(w2&&Math.abs(w2-G.w)>4)this.resize()}};
 }
@@ -79,16 +90,20 @@ function popTarget3d(id,cfg){
       var S3=setup3D(G,360,.72,0x0d1530);if(!S3)return;
       var scene=S3.scene,camera=S3.camera;
       camera.position.set(0,COLS*.62+1.4,ROWS*.95+1.4);camera.lookAt(0,0,0);
-      var board=new THREE.Mesh(new THREE.BoxGeometry(COLS*.95,.3,ROWS*.95),new THREE.MeshStandardMaterial({color:0x241c47,metalness:.2,roughness:.85}));
-      board.position.y=-.3;scene.add(board);
+      var board=new THREE.Mesh(new THREE.BoxGeometry(COLS*.95+.5,.3,ROWS*.95+.5),new THREE.MeshStandardMaterial({color:0x241c47,metalness:.2,roughness:.85}));
+      board.position.y=-.3;board.receiveShadow=true;scene.add(board);
       var colorNum=parseInt(cfg.color.replace('#','0x'));
+      addGridLines(scene,COLS*.95+.5,ROWS*.95+.5,-.145);
+      addRails(scene,COLS*.95+.5,ROWS*.95+.5,-.3,0x2a2155);
+      glowOrbs(scene,[[-(COLS*.95+.5)/2+.25,-.05,-(ROWS*.95+.5)/2+.25],[(COLS*.95+.5)/2-.25,-.05,-(ROWS*.95+.5)/2+.25],[-(COLS*.95+.5)/2+.25,-.05,(ROWS*.95+.5)/2-.25],[(COLS*.95+.5)/2-.25,-.05,(ROWS*.95+.5)/2-.25]],colorNum);
+      var particles=makeParticlePool();
       var holes=[],gridDiv,msgDiv,score,lives,up,hideTimer,spawnTimer,speedT,combo,ended;
       function holePos(r,c){return[(c-(COLS-1)/2)*.95,(r-(ROWS-1)/2)*.95]}
       for(var r=0;r<ROWS;r++){holes.push([]);for(var c=0;c<COLS;c++){
         var ring=new THREE.Mesh(new THREE.TorusGeometry(.32,.05,10,24),new THREE.MeshStandardMaterial({color:0x120e2a}));
         ring.rotation.x=Math.PI/2;var xz=holePos(r,c);ring.position.set(xz[0],-.05,xz[1]);scene.add(ring);
-        var targetMesh=new THREE.Mesh(new THREE.ConeGeometry(.26,.5,10),new THREE.MeshStandardMaterial({color:colorNum,metalness:.2,roughness:.4}));
-        targetMesh.position.set(xz[0],-.6,xz[1]);scene.add(targetMesh);
+        var targetMesh=new THREE.Mesh(new THREE.ConeGeometry(.26,.5,10),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.35,metalness:.2,roughness:.4}));
+        targetMesh.position.set(xz[0],-.6,xz[1]);targetMesh.castShadow=true;scene.add(targetMesh);
         holes[r].push({mesh:targetMesh,up:false,animY:-.6,restY:-.6,upY:.3});
       }}
       gridDiv=document.createElement('div');gridDiv.style.cssText='display:grid;grid-template-columns:repeat('+COLS+',1fr);gap:8px;width:100%;max-width:300px;margin:0 auto;';
@@ -109,9 +124,10 @@ function popTarget3d(id,cfg){
       function hit(r,c){
         if(ended)return;
         var h=holes[r][c];
-        if(!h.up){lives--;combo=0;updateHud();G.burst(G.w/2,G.h/2,R.coral,6);if(lives<=0)return endGame();return}
+        var xz=holePos(r,c);
+        if(!h.up){lives--;combo=0;updateHud();burst3d(scene,particles,xz[0],.1,xz[1],0xff6b4a,8);if(lives<=0)return endGame();return}
         h.up=!1;refreshCells();score+=10+combo*2;combo++;speedT++;updateHud();
-        G.burst(G.w/2,G.h/2,cfg.color,10);
+        burst3d(scene,particles,xz[0],.2,xz[1],colorNum,14);
       }
       function endGame(){
         ended=!0;updateMsg('Out of lives!',R.coral);refreshCells();
@@ -132,6 +148,7 @@ function popTarget3d(id,cfg){
           h.mesh.position.y=h.animY;
         }
         tickLogic(performance.now());
+        stepParticles3d(scene,particles);
         S3.maxResizeCheck();
         S3.renderer.render(S3.scene,S3.camera);
       }
@@ -160,19 +177,23 @@ function fallCatch3d(id,cfg){
       var S3=setup3D(G,360,.78,0x0d1530);if(!S3)return;
       var scene=S3.scene,camera=S3.camera;
       camera.position.set(0,3.2,5.6);camera.lookAt(0,1,0);
-      var floor=new THREE.Mesh(new THREE.PlaneGeometry(6,8),new THREE.MeshStandardMaterial({color:0x0a1020,metalness:.2,roughness:.9}));
-      floor.rotation.x=-Math.PI/2;floor.position.y=-.01;scene.add(floor);
+      var floor=new THREE.Mesh(new THREE.PlaneGeometry(6,10),new THREE.MeshStandardMaterial({color:0x1c1640,metalness:.2,roughness:.9}));
+      floor.rotation.x=-Math.PI/2;floor.position.y=-.01;floor.receiveShadow=true;scene.add(floor);
+      addGridLines(scene,6,10,0);
+      addRails(scene,6,10,-.01,0x2a2155);
       var goodColor=parseInt(cfg.color.replace('#','0x')),badColor=0xff6b4a;
+      glowOrbs(scene,[[-2.6,.1,-4.6],[2.6,.1,-4.6]],goodColor);
+      var particles=makeParticlePool();
       var laneW=5/LANES;
       function laneX(l){return(l-(LANES-1)/2)*laneW}
-      var catcherMesh=new THREE.Mesh(new THREE.CylinderGeometry(laneW*.42,laneW*.5,.3,16),new THREE.MeshStandardMaterial({color:goodColor,metalness:.3,roughness:.4}));
-      catcherMesh.position.set(0,.15,3);scene.add(catcherMesh);
+      var catcherMesh=new THREE.Mesh(new THREE.CylinderGeometry(laneW*.42,laneW*.5,.3,16),new THREE.MeshStandardMaterial({color:goodColor,emissive:goodColor,emissiveIntensity:.35,metalness:.3,roughness:.4}));
+      catcherMesh.position.set(0,.15,3);catcherMesh.castShadow=true;scene.add(catcherMesh);
       var catcherLane,drops,score,lives,combo,ended,spawnEvery,spawnAcc,fallSpeed;
       function spawnDrop(){
         var lane=rnd(LANES),bad=Math.random()<Math.max(.18,.4-combo*0.01);
         var shapeGeo=bad?new THREE.BoxGeometry(.32,.32,.32):new THREE.SphereGeometry(.22,14,10);
-        var mesh=new THREE.Mesh(shapeGeo,new THREE.MeshStandardMaterial({color:bad?badColor:goodColor,metalness:.25,roughness:.5}));
-        mesh.position.set(laneX(lane),3.6,-6);scene.add(mesh);
+        var dropCol=bad?badColor:goodColor;var mesh=new THREE.Mesh(shapeGeo,new THREE.MeshStandardMaterial({color:dropCol,emissive:dropCol,emissiveIntensity:.3,metalness:.25,roughness:.5}));
+        mesh.castShadow=true;mesh.position.set(laneX(lane),3.6,-6);scene.add(mesh);
         drops.push({mesh:mesh,lane:lane,bad:bad,z:-6});
       }
       var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';
@@ -199,8 +220,8 @@ function fallCatch3d(id,cfg){
         for(var i=drops.length-1;i>=0;i--){
           var d=drops[i];d.z+=fallSpeed*dt;d.mesh.position.z=d.z;
           if(d.z>=2.8&&d.z<3.3&&d.lane===catcherLane){
-            if(d.bad){lives--;combo=0;G.burst(G.w/2,G.h/2,R.coral,8);if(lives<=0){scene.remove(d.mesh);disposeThree(d.mesh);drops.splice(i,1);updateHud();endGame();return}}
-            else{score+=10+combo*2;combo++;G.burst(G.w/2,G.h/2,cfg.color,10)}
+            if(d.bad){lives--;combo=0;burst3d(scene,particles,d.mesh.position.x,.2,d.mesh.position.z,badColor,10);if(lives<=0){scene.remove(d.mesh);disposeThree(d.mesh);drops.splice(i,1);updateHud();endGame();return}}
+            else{score+=10+combo*2;combo++;burst3d(scene,particles,d.mesh.position.x,.2,d.mesh.position.z,goodColor,12)}
             updateHud();
             scene.remove(d.mesh);disposeThree(d.mesh);drops.splice(i,1);continue;
           }
@@ -209,6 +230,7 @@ function fallCatch3d(id,cfg){
             scene.remove(d.mesh);disposeThree(d.mesh);drops.splice(i,1);
           }
         }
+        stepParticles3d(scene,particles);
         S3.maxResizeCheck();
         S3.renderer.render(S3.scene,S3.camera);
       }

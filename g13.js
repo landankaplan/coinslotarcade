@@ -27,6 +27,35 @@ function loadGate(el,startFn){var msg=document.createElement('div');msg.style.cs
 function makeRenderer(){var r2;try{r2=new THREE.WebGLRenderer({antialias:true,alpha:false})}catch(e){return null}r2.setPixelRatio(Math.min(window.devicePixelRatio||1,2));return r2}
 function disposeThree(obj){if(!obj)return;if(obj.geometry)obj.geometry.dispose();if(obj.material){if(Array.isArray(obj.material))obj.material.forEach(function(m){m.dispose()});else obj.material.dispose()}}
 
+/* ================= shared scene-dressing helpers: grid floor + rails + glow + 3D particles =================
+   Reuses the exact technique the site's own Snake/Brick Blitz games use (floor plane + line-grid overlay +
+   boxed rail walls + shadow-casting light + emissive glow accents + 3D sphere particle bursts) so these
+   reskinned games read as part of the same arcade, not a separate bare-bones tier. */
+function dressScene(scene3d,w,d,opts){opts=opts||{};
+  var fy=opts.y!==undefined?opts.y:-1;
+  var floor=new THREE.Mesh(new THREE.PlaneGeometry(w+2,d+2),new THREE.MeshStandardMaterial({color:opts.floor!==undefined?opts.floor:0x1c1640,roughness:.95}));
+  floor.rotation.x=-Math.PI/2;floor.position.y=fy;floor.receiveShadow=true;scene3d.add(floor);
+  var gridMat=new THREE.LineBasicMaterial({color:0x241c47,transparent:true,opacity:.75});
+  var pts=[],hw=w/2,hd=d/2,gy=fy+.01,gx,gz;
+  for(gx=-hw;gx<=hw+.001;gx++)pts.push(gx,gy,-hd,gx,gy,hd);
+  for(gz=-hd;gz<=hd+.001;gz++)pts.push(-hw,gy,gz,hw,gy,gz);
+  var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  scene3d.add(new THREE.LineSegments(geo,gridMat));
+  var wallMat=new THREE.MeshStandardMaterial({color:opts.wall!==undefined?opts.wall:0x2a2155,roughness:.8});
+  var ry=fy+.3;
+  var r1=new THREE.Mesh(new THREE.BoxGeometry(w+2,.5,.25),wallMat);r1.position.set(0,ry,-hd-1);scene3d.add(r1);
+  var r2=r1.clone();r2.material=wallMat;r2.position.z=hd+1;scene3d.add(r2);
+  var r3=new THREE.Mesh(new THREE.BoxGeometry(.25,.5,d+2),wallMat);r3.position.set(-hw-1,ry,0);scene3d.add(r3);
+  var r4=r3.clone();r4.material=wallMat;r4.position.x=hw+1;scene3d.add(r4);
+  return{floor:floor,rails:[r1,r2,r3,r4]}
+}
+function glowRing(scene3d,colorNum,y,radius){var m=new THREE.Mesh(new THREE.RingGeometry(radius*.78,radius,40),new THREE.MeshBasicMaterial({color:colorNum,transparent:true,opacity:.45,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.position.y=y;scene3d.add(m);return m}
+function cornerOrbs(scene3d,w,d,y,colorNum){var hw=w/2,hd=d/2,ptsArr=[[-hw+.6,y,-hd+.6],[hw-.6,y,-hd+.6],[-hw+.6,y,hd-.6],[hw-.6,y,hd-.6]],arr=[];ptsArr.forEach(function(p){var m=new THREE.Mesh(new THREE.SphereGeometry(.16,12,10),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.5,roughness:.4}));m.position.set(p[0],p[1],p[2]);scene3d.add(m);arr.push(m)});return arr}
+function makeParticlePool(){return[]}
+function burst3d(scene3d,pool,x,y,z,color,n){var c=new THREE.Color(color);for(var i=0;i<(n||16);i++){var mat=new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:1});var mesh=new THREE.Mesh(new THREE.SphereGeometry(.09,6,6),mat);mesh.position.set(x,y,z);scene3d.add(mesh);var a=Math.random()*Math.PI*2,sp=.06+Math.random()*.14;pool.push({mesh:mesh,vx:Math.cos(a)*sp,vy:.1+Math.random()*.1,vz:Math.sin(a)*sp,life:1})}}
+function stepParticles3d(scene3d,pool){for(var i=pool.length-1;i>=0;i--){var p=pool[i];p.vy-=.012;p.mesh.position.x+=p.vx;p.mesh.position.y+=p.vy;p.mesh.position.z+=p.vz;p.life-=.035;p.mesh.material.opacity=Math.max(0,p.life);if(p.life<=0){scene3d.remove(p.mesh);disposeThree(p.mesh);pool.splice(i,1)}}}
+function enableShadows(renderer3d,sun){renderer3d.shadowMap.enabled=true;sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.near=1;sun.shadow.camera.far=30;sun.shadow.camera.left=-8;sun.shadow.camera.right=8;sun.shadow.camera.top=8;sun.shadow.camera.bottom=-8}
+
 /* mount-API kit, mirroring edu.js's kit()/def() (the proven working pattern used by the Education category) */
 var ARROWS=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '];
 function kit(id,el,x){
@@ -69,24 +98,29 @@ function cardDuel3d(id,cfg){
       var deck,current,lives,streak,score,pot,message,msgColor,lockT,flipT,flipping,pendingCard,flipStartY;
       function multiplier(sv){return Math.min(5,1+Math.floor((sv-1)/3))}
       var scene3d=new THREE.Scene();scene3d.fog=new THREE.Fog(0x0d1530,14,34);
-      var camera3d=new THREE.PerspectiveCamera(50,1,.1,100);camera3d.position.set(0,2.2,5.2);camera3d.lookAt(0,.6,0);
+      var camera3d=new THREE.PerspectiveCamera(42,1,.1,100);camera3d.position.set(0,3.4,6.4);camera3d.lookAt(0,.2,0);
       var renderer3d=makeRenderer();
       if(!renderer3d){G.el.innerHTML='<div style="padding:40px;text-align:center;">3D engine failed to load.</div>';return}
       var wrapDiv=document.createElement('div');wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:12px';G.el.appendChild(wrapDiv);
-      var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:360px;aspect-ratio:360/260;margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
-      function resize(){var W=canvasWrap.clientWidth||360,H=W*260/360;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
+      var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:420px;aspect-ratio:420/320;margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
+      function resize(){var W=canvasWrap.clientWidth||420,H=W*320/420;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
       var sz=resize();renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';canvasWrap.appendChild(renderer3d.domElement);G.cv=renderer3d.domElement;G.w=sz[0];G.h=sz[1];
-      scene3d.add(new THREE.AmbientLight(0xffffff,.7));var sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(3,6,4);scene3d.add(sun);
-      var floor=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshStandardMaterial({color:0x0a1020,metalness:.2,roughness:.9}));floor.rotation.x=-Math.PI/2;floor.position.y=-1;scene3d.add(floor);
+      scene3d.add(new THREE.AmbientLight(0xcfe9ff,.65));var sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(4,7,5);scene3d.add(sun);
+      enableShadows(renderer3d,sun);
+      dressScene(scene3d,7,5.5,{y:-1});
+      glowRing(scene3d,colorNum,-.99,1.3);
+      var orbs=cornerOrbs(scene3d,7,5.5,-.5,colorNum);
+      var particles=makeParticlePool();
       var cardCanvas=document.createElement('canvas');cardCanvas.width=256;cardCanvas.height=358;var cctx=cardCanvas.getContext('2d');
       var cardTex=new THREE.CanvasTexture(cardCanvas);
-      var sideMat=new THREE.MeshStandardMaterial({color:colorNum});
+      var sideMat=new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.25});
       var cardMesh=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.2,.06),[sideMat,sideMat,sideMat,sideMat,new THREE.MeshStandardMaterial({map:cardTex}),new THREE.MeshStandardMaterial({color:0x1a1530})]);
-      cardMesh.position.y=.6;scene3d.add(cardMesh);
+      cardMesh.position.y=.6;cardMesh.castShadow=true;scene3d.add(cardMesh);
+      var spotlight=new THREE.PointLight(colorNum,.9,6);spotlight.position.set(0,2,1.5);scene3d.add(spotlight);
       function drawCard(card){cctx.clearRect(0,0,256,358);cctx.fillStyle='#f4f1ff';cctx.beginPath();cctx.roundRect(4,4,248,350,20);cctx.fill();var red=1===card.s||2===card.s;cctx.fillStyle=red?'#d8434a':'#171233';cctx.font='700 46px Figtree, sans-serif';cctx.textAlign='left';cctx.fillText(E[card.r],16,58);cctx.font='64px Figtree, sans-serif';cctx.textAlign='center';cctx.fillText(suits[card.s],128,210);cctx.save();cctx.translate(240,330);cctx.rotate(Math.PI);cctx.font='700 46px Figtree, sans-serif';cctx.textAlign='left';cctx.fillText(E[card.r],0,0);cctx.restore();cardTex.needsUpdate=!0}
       function updateHud(){msgDiv.textContent=message;msgDiv.style.color=msgColor;livesDiv.textContent='LIVES '+'♥'.repeat(Math.max(0,lives));potBtn.textContent=pot>0?'BANK — '+pot:'BANK';potBtn.disabled=pot<=0;G.hud([['SCORE',padnum(score)],['STREAK',streak],['POT',pot]])}
       function bank(){if(lockT>0||pot<=0||flipping)return;score+=pot;message='Banked '+pot+' points!';msgColor=cfg.color;pot=0;streak=0;updateHud()}
-      function guess(wantHigher){if(lockT>0||flipping)return;if(!deck.length)deck=T();var next=deck.pop();if(next.r===current.r){message='Same rank. Push.';msgColor='#9aa'}else if(next.r>current.r===wantHigher){streak++;var mult=multiplier(streak);pot+=10*mult;message='Correct! Streak '+streak+' · x'+mult;msgColor='#3ddc97'}else{lives--;pot=0;streak=0;message='Wrong! Pot lost.';msgColor='#ff6b4a'}
+      function guess(wantHigher){if(lockT>0||flipping)return;if(!deck.length)deck=T();var next=deck.pop();if(next.r===current.r){message='Same rank. Push.';msgColor='#9aa'}else if(next.r>current.r===wantHigher){streak++;var mult=multiplier(streak);pot+=10*mult;message='Correct! Streak '+streak+' · x'+mult;msgColor='#3ddc97';burst3d(scene3d,particles,cardMesh.position.x,cardMesh.position.y,cardMesh.position.z,0x3ddc97,18)}else{lives--;pot=0;streak=0;message='Wrong! Pot lost.';msgColor='#ff6b4a';burst3d(scene3d,particles,cardMesh.position.x,cardMesh.position.y,cardMesh.position.z,0xff6b4a,18)}
       flipping=!0;flipT=0;flipStartY=cardMesh.rotation.y;pendingCard=next;updateHud()}
       var hudBar=document.createElement('div');hudBar.style.cssText='display:flex;justify-content:space-between;width:100%;max-width:360px;font-weight:700;font-size:.8rem;opacity:.85;';var livesDiv=document.createElement('div');hudBar.appendChild(livesDiv);wrapDiv.appendChild(hudBar);
       var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrapDiv.appendChild(msgDiv);
@@ -100,6 +134,8 @@ function cardDuel3d(id,cfg){
       G.fns.push(function(){scene3d.traverse(function(o){disposeThree(o)});renderer3d.dispose()});
       function tick(dt){
         if(flipping){var p2=flipT;flipT+=dt/.5;if(p2<.5&&flipT>=.5)drawCard(pendingCard);cardMesh.rotation.y=flipStartY+Math.min(flipT,1)*Math.PI;if(flipT>=1){cardMesh.rotation.y=flipStartY+Math.PI;current=pendingCard;flipping=!1;if(lives<=0){lockT=99;G.later(function(){G.over(score,'Out of lives. Final score: '+score)},500)}}}
+        var tnow=performance.now()/1000;orbs.forEach(function(o,i){o.position.y=-.5+Math.sin(tnow*1.4+i*1.5)*.08});
+        stepParticles3d(scene3d,particles);
         var w2=canvasWrap.clientWidth;if(w2&&Math.abs(w2-G.w)>4){var sz2=resize();G.w=sz2[0];G.h=sz2[1]}
         renderer3d.render(scene3d,camera3d)}
       G.begin(function(){deck=T();current=deck.pop();lives=3;streak=0;score=0;pot=0;message='Higher or lower?';msgColor='#E9FBF9';lockT=0;flipping=!1;flipT=0;drawCard(current);cardMesh.rotation.y=0;updateHud();G.frame(tick)})
@@ -123,23 +159,26 @@ function wordReveal3d(id,cfg){
       var word,guessed,wrong,score,solved,ended;
       var MAXWRONG=6;
       var scene3d=new THREE.Scene();scene3d.fog=new THREE.Fog(0x0d1530,14,34);
-      var camera3d=new THREE.PerspectiveCamera(50,1,.1,100);camera3d.position.set(0,2.6,6);camera3d.lookAt(0,.4,0);
+      var camera3d=new THREE.PerspectiveCamera(44,1,.1,100);camera3d.position.set(0,3.6,7.2);camera3d.lookAt(0,.1,0);
       var renderer3d=makeRenderer();
       if(!renderer3d){G.el.innerHTML='<div style="padding:40px;text-align:center;">3D engine failed to load.</div>';return}
       var wrapDiv=document.createElement('div');wrapDiv.style.cssText='display:flex;flex-direction:column;align-items:center;width:100%;gap:12px';G.el.appendChild(wrapDiv);
-      var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:400px;aspect-ratio:400/220;margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
-      function resize(){var W=canvasWrap.clientWidth||400,H=W*220/400;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
+      var canvasWrap=document.createElement('div');canvasWrap.style.cssText='position:relative;width:100%;max-width:440px;aspect-ratio:440/280;margin:0 auto;border-radius:14px;overflow:hidden;background:#0d1530';wrapDiv.appendChild(canvasWrap);
+      function resize(){var W=canvasWrap.clientWidth||440,H=W*280/440;renderer3d.setSize(W,H);camera3d.aspect=W/H;camera3d.updateProjectionMatrix();return[W,H]}
       var sz=resize();renderer3d.domElement.style.cssText='display:block;width:100%;height:100%';canvasWrap.appendChild(renderer3d.domElement);G.cv=renderer3d.domElement;G.w=sz[0];G.h=sz[1];
-      scene3d.add(new THREE.AmbientLight(0xffffff,.7));var sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(3,6,4);scene3d.add(sun);
-      var floor=new THREE.Mesh(new THREE.PlaneGeometry(14,8),new THREE.MeshStandardMaterial({color:0x0a1020,metalness:.2,roughness:.9}));floor.rotation.x=-Math.PI/2;floor.position.y=-1.2;scene3d.add(floor);
+      scene3d.add(new THREE.AmbientLight(0xcfe9ff,.65));var sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(4,7,5);scene3d.add(sun);
+      enableShadows(renderer3d,sun);
+      dressScene(scene3d,13,7,{y:-1.2});
+      glowRing(scene3d,colorNum,-1.19,2.6);
+      var particles=makeParticlePool();
       var tileGroup=new THREE.Group();scene3d.add(tileGroup);
       var tiles=[];
       function tileTexture(ch){var c=document.createElement('canvas');c.width=96;c.height=96;var ctx2=c.getContext('2d');ctx2.fillStyle='#f4f1ff';ctx2.beginPath();ctx2.roundRect(4,4,88,88,14);ctx2.fill();ctx2.fillStyle='#171233';ctx2.font='700 52px Figtree, sans-serif';ctx2.textAlign='center';ctx2.textBaseline='middle';ctx2.fillText(ch?ch.toUpperCase():'',48,52);return new THREE.CanvasTexture(c)}
       function blankTexture(){var c=document.createElement('canvas');c.width=96;c.height=96;var ctx2=c.getContext('2d');ctx2.fillStyle='#241c47';ctx2.beginPath();ctx2.roundRect(4,4,88,88,14);ctx2.fill();return new THREE.CanvasTexture(c)}
-      function buildTiles(){tiles.forEach(function(t2){tileGroup.remove(t2.mesh);disposeThree(t2.mesh)});tiles=[];var n=word.length,spacing=.92,totalW=(n-1)*spacing;for(var i=0;i<n;i++){var blankMat=new THREE.MeshStandardMaterial({map:blankTexture()});var sideMat=new THREE.MeshStandardMaterial({color:colorNum});var mesh=new THREE.Mesh(new THREE.BoxGeometry(.8,.8,.1),[sideMat,sideMat,sideMat,sideMat,blankMat,sideMat]);mesh.position.set(-totalW/2+i*spacing,.4,0);tileGroup.add(mesh);tiles.push({mesh:mesh,ch:word.charAt(i),revealed:!1,flipT:0,flipping:!1})}}
+      function buildTiles(){tiles.forEach(function(t2){tileGroup.remove(t2.mesh);disposeThree(t2.mesh)});tiles=[];var n=word.length,spacing=.92,totalW=(n-1)*spacing;for(var i=0;i<n;i++){var blankMat=new THREE.MeshStandardMaterial({map:blankTexture()});var sideMat=new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.2});var mesh=new THREE.Mesh(new THREE.BoxGeometry(.8,.8,.1),[sideMat,sideMat,sideMat,sideMat,blankMat,sideMat]);mesh.position.set(-totalW/2+i*spacing,.4,0);mesh.castShadow=true;tileGroup.add(mesh);tiles.push({mesh:mesh,ch:word.charAt(i),revealed:!1,flipT:0,flipping:!1})}}
       function revealLetter(ch){for(var i=0;i<tiles.length;i++)if(tiles[i].ch===ch&&!tiles[i].revealed){tiles[i].revealed=!0;tiles[i].flipping=!0;tiles[i].flipT=0}}
       function isComplete(){return tiles.every(function(t2){return t2.revealed})}
-      function guessLetter(ch){if(ended||guessed[ch])return;guessed[ch]=!0;if(word.indexOf(ch)>=0){revealLetter(ch);updateKeys();if(isComplete()){solved++;score+=100;ended=!0;msgDiv.textContent='Solved! +100';msgDiv.style.color='#3ddc97';G.later(newWord,900)}}else{wrong++;updateKeys();msgDiv.textContent='Wrong guess — '+(MAXWRONG-wrong)+' left';msgDiv.style.color='#ff6b4a';if(wrong>=MAXWRONG){ended=!0;msgDiv.textContent='Out of guesses. Word was '+word.toUpperCase();G.later(function(){G.over(score,'Words solved: '+solved+' · Score: '+score)},1200)}}
+      function guessLetter(ch){if(ended||guessed[ch])return;guessed[ch]=!0;if(word.indexOf(ch)>=0){revealLetter(ch);updateKeys();if(isComplete()){solved++;score+=100;ended=!0;msgDiv.textContent='Solved! +100';msgDiv.style.color='#3ddc97';burst3d(scene3d,particles,0,.4,0,0x3ddc97,26);G.later(newWord,900)}}else{wrong++;updateKeys();msgDiv.textContent='Wrong guess — '+(MAXWRONG-wrong)+' left';msgDiv.style.color='#ff6b4a';burst3d(scene3d,particles,0,1.4,0,0xff6b4a,10);if(wrong>=MAXWRONG){ended=!0;msgDiv.textContent='Out of guesses. Word was '+word.toUpperCase();G.later(function(){G.over(score,'Words solved: '+solved+' · Score: '+score)},1200)}}
       updateHud()}
       function updateHud(){G.hud([['SCORE',padnum(score)],['SOLVED',solved],['WRONG',wrong+'/'+MAXWRONG]])}
       var keysDiv=document.createElement('div');keysDiv.style.cssText='display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%;max-width:420px;';wrapDiv.appendChild(keysDiv);
@@ -149,7 +188,8 @@ function wordReveal3d(id,cfg){
       var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrapDiv.appendChild(msgDiv);
       G.press=function(k){if(k&&1===k.length&&k>='a'&&k<='z')guessLetter(k)};
       G.fns.push(function(){scene3d.traverse(function(o){disposeThree(o)});renderer3d.dispose()});
-      function tick(dt){tiles.forEach(function(t2){if(t2.flipping){t2.flipT+=dt/.4;if(t2.flipT>=.5&&t2.flipT-dt/.4<.5){t2.mesh.material[4].dispose();t2.mesh.material[4]=new THREE.MeshStandardMaterial({map:tileTexture(t2.ch)})}t2.mesh.rotation.y=Math.min(t2.flipT,1)*Math.PI;if(t2.flipT>=1){t2.flipping=!1;t2.mesh.rotation.y=Math.PI}}});
+      function tick(dt){tiles.forEach(function(t2){if(t2.flipping){t2.flipT+=dt/.4;if(t2.flipT>=.5&&t2.flipT-dt/.4<.5){t2.mesh.material[4].dispose();t2.mesh.material[4]=new THREE.MeshStandardMaterial({map:tileTexture(t2.ch),emissive:colorNum,emissiveIntensity:.12})}t2.mesh.rotation.y=Math.min(t2.flipT,1)*Math.PI;if(t2.flipT>=1){t2.flipping=!1;t2.mesh.rotation.y=Math.PI}}});
+        stepParticles3d(scene3d,particles);
         var w2=canvasWrap.clientWidth;if(w2&&Math.abs(w2-G.w)>4){var sz2=resize();G.w=sz2[0];G.h=sz2[1]}
         renderer3d.render(scene3d,camera3d)}
       function newWord(){word=pick(cfg.words).toLowerCase();guessed={};wrong=0;ended=!1;msgDiv.textContent='Guess the word!';msgDiv.style.color='#E9FBF9';updateKeys();buildTiles();updateHud()}
