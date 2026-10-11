@@ -36,6 +36,74 @@ fi
 node --check public/games-ext.js
 echo "Bundle OK: $EXT_SUM"
 
+# --- Cards & Words v2 extras (g13.js): wraps window.CSA_EXT (chain/wrap pattern, same
+# technique edu.js uses below) rather than sharing g01-g12's closure, since that closure
+# is fully closed by the end of g12.js. Adds cardDuel3d x8 + wordReveal3d x7, bringing
+# Cards & Words from 5 to 20 games. Checksum + syntax gated like the base bundle. ---
+G13_SUM=$(md5sum g13.js | awk '{print $1}')
+if [ "$G13_SUM" != "41cec52f656c13ee27f2d9069a4a790f" ]; then
+  echo "G13 BUNDLE MISMATCH: got $G13_SUM"
+  exit 1
+fi
+node --check g13.js
+printf '\n' >> public/games-ext.js
+cat g13.js >> public/games-ext.js
+node --check public/games-ext.js
+echo "Cards & Words extras OK: $G13_SUM"
+
+# --- Board & Strategy v2 extras (g14.js): same chain/wrap pattern as g13.js. Adds
+# dropConnect3d x5 + flipGrid3d x4 + nimStones3d x4, bringing Board & Strategy from 7 to 20. ---
+G14_SUM=$(md5sum g14.js | awk '{print $1}')
+if [ "$G14_SUM" != "f4d47ea5b01b7ec48b85a2731995a588" ]; then
+  echo "G14 BUNDLE MISMATCH: got $G14_SUM"
+  exit 1
+fi
+node --check g14.js
+printf '\n' >> public/games-ext.js
+cat g14.js >> public/games-ext.js
+node --check public/games-ext.js
+echo "Board & Strategy extras OK: $G14_SUM"
+
+# --- Reflex v2 extras (g15.js): same chain/wrap pattern. Adds popTarget3d x4 + fallCatch3d x4,
+# bringing Reflex from 12 to 20. ---
+G15_SUM=$(md5sum g15.js | awk '{print $1}')
+if [ "$G15_SUM" != "1a6b07e4bfb6462b0989a61725f0ee83" ]; then
+  echo "G15 BUNDLE MISMATCH: got $G15_SUM"
+  exit 1
+fi
+node --check g15.js
+printf '\n' >> public/games-ext.js
+cat g15.js >> public/games-ext.js
+node --check public/games-ext.js
+echo "Reflex extras OK: $G15_SUM"
+
+# --- Sports v2 extras (g16.js): same chain/wrap pattern. Adds aimTarget3d x5 + railSport3d x2,
+# bringing Sports from 13 to 20. ---
+G16_SUM=$(md5sum g16.js | awk '{print $1}')
+if [ "$G16_SUM" != "0042e4f1e576d2a1b2f3081102d84eec" ]; then
+  echo "G16 BUNDLE MISMATCH: got $G16_SUM"
+  exit 1
+fi
+node --check g16.js
+printf '\n' >> public/games-ext.js
+cat g16.js >> public/games-ext.js
+node --check public/games-ext.js
+echo "Sports extras OK: $G16_SUM"
+
+# --- Puzzle v2 extras (g17.js): same chain/wrap pattern. Adds slidingBlocks3d x1 + gridLights3d x1
+# + pathConnect3d x1 + numberChain3d x1, bringing Puzzle from 16 to 20 -- the last of the 9
+# categories brought up to 20 games. ---
+G17_SUM=$(md5sum g17.js | awk '{print $1}')
+if [ "$G17_SUM" != "cc9173367a8f87a36821dec8678b8dc2" ]; then
+  echo "G17 BUNDLE MISMATCH: got $G17_SUM"
+  exit 1
+fi
+node --check g17.js
+printf '\n' >> public/games-ext.js
+cat g17.js >> public/games-ext.js
+node --check public/games-ext.js
+echo "Puzzle extras OK: $G17_SUM"
+
 # --- Education category v2: single verified bundle (checksum hard gate - this file was copied
 # byte-for-byte via the git repo, never manually retyped, so an exact match is expected) ---
 EDU_SUM=$(md5sum edu.js | awk '{print $1}')
