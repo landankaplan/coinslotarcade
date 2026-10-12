@@ -1073,6 +1073,492 @@ for (r = 0; r < 4; r++) for (c = 0; c < 7; c++) s += T(68 + c * 21, 24 + r * 22 
 return s;
 };
 
+
+/* ---------- shared scene helpers for the 108-game expansion (2026) ---------- */
+function duelArt(a, b, c, d, k) {
+  // two face-cards + big center glyph, modeled on the original higherLower art
+  return R(102, 14, 66, 76, M, 7, I)
+    + P('M85 86A44 5 0 1 0 173 86A44 5 0 1 0 85 86Z', I, 0, 0, ' opacity=' + Q + '.22' + Q + '')
+    + R(96, 8, 66, 76, W, 7, I) + T(112, 30, 16, a, I) + T(129, 64, 30, b, I)
+    + C(68, 35, 17, k) + P('M52 46L68 22L84 46Z', I) + T(68, 40, 13, c, W)
+    + C(190, 57, 17, k) + P('M174 46L190 70L206 46Z', I) + T(190, 62, 13, d, W)
+    + P('M52 62H84M174 30H206', 0, I, 3, DOT)
+    + STAR(129, 88, 8, k);
+}
+function wordArt(icon, letters, blankFrom, k) {
+  // themed icon on the left + a row of letter tiles, some still blank, on the right
+  var s = icon, i, n = letters.length, tw = 20, gap = 4, x0 = 258 - 14 - n * (tw + gap);
+  for (i = 0; i < n; i++) {
+    var x = x0 + i * (tw + gap);
+    if (i < blankFrom) s += R(x, 30, tw, 26, W, 4, I) + T(x + tw / 2, 50, 15, letters.charAt(i), I);
+    else s += R(x, 30, tw, 26, 0, 4, k);
+  }
+  s += P('M' + (x0 - 6) + ' 60H' + (x0 + n * (tw + gap) - gap + 6), 0, I, 2, DOT);
+  return s;
+}
+function dropArt(backdrop, k) {
+  // vertical column grid with one piece mid-drop, modeled on fiveInRow/boxLine
+  var s = backdrop, i;
+  s += R(70, 6, 150, 80, 'none', 8, I);
+  for (i = 1; i < 6; i++) s += L(70 + i * 25, 6, 70 + i * 25, 86, I, 1.3, ' stroke-opacity=' + Q + '.4' + Q + '');
+  for (i = 1; i < 4; i++) s += L(70, 6 + i * 20, 220, 6 + i * 20, I, 1.3, ' stroke-opacity=' + Q + '.4' + Q + '');
+  s += C(95, 66, 9, I) + C(120, 66, 9, k) + C(145, 46, 9, I) + C(145, 66, 9, k) + C(170, 66, 9, I);
+  s += C(170, 26, 9, W, I, 2.5) + L(170, 6, 170, 20, I, 2, DOT);
+  s += P('M157 18L170 6L183 18Z', k);
+  return s;
+}
+function flipArt(backdrop, k) {
+  // small othello-style grid with discs mid-flip, modeled on draughts
+  var s = backdrop, i, j, cx, cy;
+  s += R(84, 10, 90, 72, 'none', 6, I);
+  for (i = 1; i < 5; i++) s += L(84 + i * 18, 10, 84 + i * 18, 82, I, 1, ' stroke-opacity=' + Q + '.35' + Q + '');
+  for (i = 1; i < 4; i++) s += L(84, 10 + i * 18, 174, 10 + i * 18, I, 1, ' stroke-opacity=' + Q + '.35' + Q + '');
+  var cells = [[93, 19, I], [111, 19, W], [129, 37, I], [147, 37, k], [93, 55, W], [165, 73, I]];
+  for (i = 0; i < cells.length; i++) { cx = cells[i][0]; cy = cells[i][1]; s += C(cx, cy, 7, cells[i][2], I, 1.4); }
+  s += C(129, 37, 7, 0, W, 1.4, DOT);
+  return s;
+}
+function nimArt(backdrop, piles, k) {
+  // triangular stone piles of decreasing height, modeled on seedSow/draughts
+  var s = backdrop, i, j, x0 = 30, gap = (258 - 60) / piles.length;
+  for (i = 0; i < piles.length; i++) {
+    var cx = x0 + i * gap + gap / 2, n = piles[i];
+    for (j = 0; j < n; j++) s += C(cx, 80 - j * 15, 9 - j * 0.6, j % 2 ? k : I, I, 1.2);
+  }
+  return s;
+}
+function popArt(hole1, hole2, hole3, charIcon, k) {
+  // three burrows with one character mid-pop, modeled on the original whack art
+  return E(50, 78, 24, 7, I) + E(129, 78, 24, 7, I) + E(208, 78, 24, 7, I)
+    + E(50, 72, 12, 8, W, I, 2) + E(208, 72, 12, 8, W, I, 2)
+    + charIcon
+    + SP(96, 30, 7, W) + SP(176, 24, 5, W) + STAR(228, 50, 8, k);
+}
+function catchArt(itemIcon, k) {
+  // falling item + a catcher paddle below, modeled on coinCatcher
+  return P('M94 58H164L154 84H104Z', I) + R(90, 54, 78, 7, W, 3, I)
+    + L(100, 84, 96, 90, I, 3) + L(158, 84, 162, 90, I, 3)
+    + itemIcon
+    + L(129, 8, 129, 36, I, 2, DOT)
+    + L(30, 90, 228, 90, I, 1.5, ' opacity=' + Q + '.3' + Q + '');
+}
+function aimArt(centerIcon, k) {
+  // crosshair target ring + a sport-specific center icon, modeled on targetBlitz
+  return C(129, 46, 34, W, I, 4) + C(129, 46, 23, k, I, 2) + C(129, 46, 12, W)
+    + L(129, 4, 129, 14, I, 3) + L(129, 78, 129, 88, I, 3) + L(88, 46, 98, 46, I, 3) + L(160, 46, 170, 46, I, 3)
+    + centerIcon
+    + SP(50, 20, 6, W) + SP(212, 70, 5, W);
+}
+function railArt(netIcon, k) {
+  // a rally net/wall with two paddles and the ball mid-flight
+  return R(22, 12, 214, 68, 0, 3, I)
+    + netIcon
+    + G('rotate(-22 42 40)', R(38, 36, 4, 15, I, 2)) + C(48, 32, 7, I) + C(48, 32, 3, W)
+    + G('rotate(22 216 58)', R(212, 46, 4, 15, I, 2)) + C(206, 56, 7, I) + C(206, 56, 3, W)
+    + P('M60 34Q130 14 190 48', 0, I, 2, DOT) + C(198, 50, 5.5, k, I, 1.5);
+}
+function idleArt(icon, k) {
+  // factory/warehouse floor + conveyor + a dark portal medallion framing the themed icon,
+  // modeled on byteFarm/cloudLegion but with the medallion added so the icon reads on every
+  // cabinet colour (a bright icon fill would otherwise vanish against a same-colour background)
+  var s = C(129, 38, 27, I) + C(129, 38, 27, 0, W, 1.4, ' stroke-opacity=' + Q + '.25' + Q + '');
+  s += R(16, 66, 226, 20, I, 3) + P('M24 76H234', 0, W, 2, ' stroke-dasharray=' + Q + '6 8' + Q + '');
+  s += C(34, 72, 2, k) + C(84, 82, 2, k) + C(150, 72, 2, k) + C(200, 82, 2, k) + C(224, 72, 2, k);
+  s += icon;
+  s += R(16, 86, 226, 4, I, 2, ' opacity=' + Q + '.4' + Q + '');
+  return s;
+}
+function rpgArt(icon, k) {
+  // arched doorway + torches + glow medallion + themed boss icon, modeled on dungeonDelver/arenaChampion
+  var floor = '';
+  for (var fx = 0; fx < 258; fx += 22) floor += L(fx, 88, fx + 11, 82, I, 1, ' stroke-opacity=' + Q + '.2' + Q + '');
+  function torch(x) {
+    return L(x, 56, x, 80, I, 4) + P('M' + x + ' 54Q' + (x - 9) + ' 46 ' + (x - 3) + ' 35Q' + x + ' 42 ' + (x + 5) + ' 40Q' + (x + 5) + ' 48 ' + (x + 9) + ' 50Q' + (x + 7) + ' 56 ' + x + ' 54Z', k, I, 1.2);
+  }
+  var glow = C(129, 60, 22, k, 0, 0, ' opacity=' + Q + '.2' + Q + '') + C(129, 60, 13, k, 0, 0, ' opacity=' + Q + '.3' + Q + '');
+  return floor + torch(58) + torch(200)
+    + P('M78 88V44A51 40 0 0 1 180 44V88Z', I) + glow + icon;
+}
+function runnerArt(icon, k) {
+  // horizon lane + obstacle + themed setting icon, modeled on byteRunner/towerAscent
+  return L(26, 84, 232, 84, I, 3)
+    + L(36, 30, 66, 30, I, 3) + L(44, 44, 72, 44, I, 3) + L(36, 58, 62, 58, I, 3)
+    + icon
+    + L(240, 84, 240, 64, I, 3) + P('M240 64L254 70L240 76Z', I)
+    + C(70, 20, 9, W, I, 2.5) + T(70, 24, 11, '$', I);
+}
+
+/* ---------- Cards & Words v2 (cardDuel3d / wordReveal3d) ---------- */
+ART.starDuel = function (k) {
+  return duelArt('7', '\u2605', 'A', 'K', k);
+};
+ART.gemDuel = function (k) {
+  return duelArt('9', '\u25C6', 'J', '5', k);
+};
+ART.casinoDuel = function (k) {
+  return duelArt('K', '\u2660', 'Q', '8', k);
+};
+ART.arrowDuel = function (k) {
+  return duelArt('4', '\u25B2', '10', '2', k);
+};
+ART.moonDuel = function (k) {
+  return duelArt('J', '\u263E', '6', 'A', k);
+};
+ART.crownDuel = function (k) {
+  return duelArt('Q', '\u2655', '9', 'K', k);
+};
+ART.waveDuel = function (k) {
+  return duelArt('3', '\u2248', '7', '5', k);
+};
+ART.boltDuel = function (k) {
+  return duelArt('10', '\u26A1', '4', '8', k);
+};
+ART.animalWords = function (k) {
+  return wordArt(E(40, 54, 13, 10, I) + E(28, 44, 7, 6, I) + E(52, 44, 7, 6, I) + C(35, 50, 1.6, W) + C(45, 50, 1.6, W) + P('M40 64Q34 72 26 70', 0, I, 3), 'TIGER', 2, k);
+};
+ART.foodWords = function (k) {
+  return wordArt(C(40, 50, 18, I) + C(40, 50, 13, k) + L(40, 50, 40, 30, I, 3) + C(40, 30, 3, I) + P('M30 42Q40 36 50 42', 0, W, 2), 'NOODLE', 3, k);
+};
+ART.spaceWords = function (k) {
+  return wordArt(P('M40 20L50 54L40 66L30 54Z', W, I, 2) + C(40, 30, 5, k) + P('M32 56L24 70M48 56L56 70', 0, I, 3) + SP(58, 30, 6, W), 'COMET', 2, k);
+};
+ART.sportsWords = function (k) {
+  return wordArt(C(40, 48, 17, W, I, 2.5) + P('M28 42Q40 48 52 42M28 54Q40 48 52 54M40 31V65', 0, I, 1.6), 'RELAY', 2, k);
+};
+ART.musicWords = function (k) {
+  return wordArt(E(34, 60, 9, 7, I) + R(42, 20, 4, 42, I) + P('M42 20L62 14V26L42 32Z', I) + C(34, 60, 3, W), 'TEMPO', 2, k);
+};
+ART.natureWords = function (k) {
+  return wordArt(P('M22 70Q22 36 40 20Q58 36 58 70Z', I) + L(40, 20, 40, 70, W, 2) + P('M40 34Q50 30 56 36M40 48Q28 44 24 50', 0, W, 2), 'CANYON', 3, k);
+};
+ART.techWords = function (k) {
+  return wordArt(R(20, 36, 40, 28, I, 4) + R(28, 44, 24, 12, k, 2) + L(26, 36, 26, 26, I, 2) + L(54, 36, 54, 26, I, 2) + L(26, 64, 26, 74, I, 2) + L(54, 64, 54, 74, I, 2), 'BACKUP', 2, k);
+};
+
+/* ---------- Board & Strategy v2 (dropConnect3d / flipGrid3d / nimStones3d) ---------- */
+ART.skylineDrop = function (k) {
+  return dropArt(R(8, 50, 14, 36, I) + R(26, 36, 14, 50, I) + R(236, 44, 14, 42, I) + R(218, 58, 14, 28, I), k);
+};
+ART.coralDrop = function (k) {
+  return dropArt(P('M14 86Q14 60 26 60Q30 44 42 54Q46 40 54 52', 0, I, 4) + C(42, 54, 3, k) + C(20, 70, 2.4, k), k);
+};
+ART.emberDrop = function (k) {
+  return dropArt(P('M16 60Q8 46 16 32Q24 42 20 54Q30 44 26 60Z', 'rgba(255,107,74,.45)') + P('M16 56Q10 48 16 38Q22 46 19 54Q26 48 23 56Z', k), k);
+};
+ART.orchardDrop = function (k) {
+  return dropArt(C(28, 46, 16, I) + L(28, 62, 28, 78, I, 3) + C(236, 50, 14, I) + L(236, 64, 236, 78, I, 3), k);
+};
+ART.nebulaDrop = function (k) {
+  return dropArt(E(36, 40, 22, 10, 'rgba(140,124,240,.35)') + SP(18, 18, 6, W) + SP(236, 60, 6, W) + STAR(236, 20, 8, W), k);
+};
+ART.galaxyFlip = function (k) {
+  return flipArt(SP(16, 16, 5, W) + SP(240, 70, 5, W) + STAR(20, 70, 7, W) + STAR(236, 16, 6, W), k);
+};
+ART.emeraldFlip = function (k) {
+  return flipArt(P('M16 46L30 30L44 46L30 62Z', 'rgba(61,220,151,.4)') + P('M214 46L228 30L242 46L228 62Z', 'rgba(61,220,151,.4)'), k);
+};
+ART.duneFlip = function (k) {
+  return flipArt(P('M0 80Q30 64 60 80', 0, I, 3) + P('M198 80Q228 64 258 80', 0, I, 3), k);
+};
+ART.tidalFlip = function (k) {
+  return flipArt(P('M0 30Q20 24 40 30T0 30', 0, I, 2, DOT) + P('M218 60Q238 54 258 60T218 60', 0, I, 2, DOT), k);
+};
+ART.templeStones = function (k) {
+  return nimArt(R(10, 4, 238, 6, I, 2), [1, 3, 5, 7], k);
+};
+ART.glacierStones = function (k) {
+  return nimArt(P('M10 4L20 -6L30 4Z', 'rgba(47,211,199,.35)'), [3, 4, 5], k);
+};
+ART.pirateStones = function (k) {
+  return nimArt(T(226, 16, 14, '$', I), [2, 4, 6, 8], k);
+};
+ART.meteorStones = function (k) {
+  return nimArt(L(210, 6, 236, -4, I, 2) + L(222, 16, 244, 8, I, 2), [1, 2, 3, 4, 5], k);
+};
+
+/* ---------- Reflex v2 (popTarget3d / fallCatch3d) ---------- */
+ART.moleThump = function (k) {
+  return popArt(0, 0, 0, E(129, 70, 13, 9, W, I, 2) + C(124, 66, 2.2, I) + C(134, 66, 2.2, I) + P('M118 76Q129 82 140 76', 0, I, 2) + C(112, 72, 2, I), k);
+};
+ART.alienZap = function (k) {
+  return popArt(0, 0, 0, E(129, 68, 14, 11, W, I, 2) + C(122, 64, 4, I, W, 1.5) + C(136, 64, 4, I, W, 1.5) + P('M122 78Q129 74 136 78', 0, I, 2), k);
+};
+ART.gemPop = function (k) {
+  return popArt(0, 0, 0, P('M129 50L144 64L129 82L114 64Z', W, I, 2.5) + L(129 - 15, 64, 129 + 15, 64, I, 1.2), k);
+};
+ART.ghostTag = function (k) {
+  return popArt(0, 0, 0, P('M116 82V58A13 13 0 1 1 142 58V82Q138 76 134 82Q129 76 124 82Q120 76 116 82Z', W, I, 2) + C(123, 60, 2.2, I) + C(135, 60, 2.2, I), k);
+};
+ART.starCatch = function (k) {
+  return catchArt(STAR(129, 30, 14, W) + SP(80, 14, 6, W) + SP(188, 18, 5, W), k);
+};
+ART.boltCatch = function (k) {
+  return catchArt(P('M138 10L120 36H134L122 58L150 28H134Z', W), k);
+};
+ART.bubbleCatch = function (k) {
+  return catchArt(C(129, 32, 17, 'rgba(47,211,199,.3)', W, 2) + C(122, 26, 4, 'rgba(255,255,255,.6)'), k);
+};
+ART.emberCatch = function (k) {
+  return catchArt(P('M129 10Q116 26 129 38Q142 26 129 10Z', k, I, 1.5) + P('M129 18Q123 26 129 32Q135 26 129 18Z', W), k);
+};
+
+/* ---------- Sports v2 (aimTarget3d / railSport3d) ---------- */
+ART.cornerKick = function (k) {
+  return aimArt(C(129, 46, 10, W, I, 2) + P('M124 40L129 44L134 40L132 48L136 52L128 52L124 56L124 50L120 46Z', I), k);
+};
+ART.freeThrowHoop = function (k) {
+  return aimArt(C(129, 46, 10, k, I, 2) + P('M121 40Q129 44 137 40M121 52Q129 48 137 52M129 36V56', 0, I, 1.4), k);
+};
+ART.archeryRange = function (k) {
+  return aimArt(C(129, 46, 11, W, I, 2.5) + C(129, 46, 5, k) + L(100, 46, 118, 46, I, 2) + P('M100 40L92 46L100 52Z', I), k);
+};
+ART.horseshoePit = function (k) {
+  return aimArt(P('M118 36A14 14 0 1 0 140 36', 0, W, 6) + L(129, 60, 129, 70, I, 3), k);
+};
+ART.shotPutField = function (k) {
+  return aimArt(C(129, 46, 9, k, I, 2) + P('M129 46Q160 30 190 40', 0, I, 2, DOT) + C(192, 40, 4, W), k);
+};
+ART.squashWall = function (k) {
+  return railArt(L(22, 12, 22, 80, I, 4) + L(22, 12, 236, 12, I, 2, ' stroke-opacity=' + Q + '.4' + Q + ''), k);
+};
+ART.badmintonRally = function (k) {
+  return railArt(L(129, 12, 129, 80, I, 2, DOT) + P('M120 44L129 32L138 44Z', W, I, 1.5) + L(129, 44, 129, 50, I, 2), k);
+};
+
+/* ---------- Puzzle v2 (slidingBlocks3d / gridLights3d / pathConnect3d / numberChain3d) ---------- */
+
+ART.slidePanels = function (k) {
+  var s = R(70, 6, 150, 80, 'none', 8, I), i, j;
+  for (i = 1; i < 4; i++) s += L(70 + i * 37.5, 6, 70 + i * 37.5, 86, I, 1.3, ' stroke-opacity=' + Q + '.35' + Q + '');
+  for (i = 1; i < 4; i++) s += L(70, 6 + i * 20, 220, 6 + i * 20, I, 1.3, ' stroke-opacity=' + Q + '.35' + Q + '');
+  var tiles = [[1, '1'], [2, '2'], [3, '3'], [5, '5'], [6, '6'], [7, '7'], [9, '8'], [11, '9']];
+  for (i = 0; i < tiles.length; i++) {
+    var idx = tiles[i][0], cx = 70 + (idx % 4) * 37.5 + 18.75, cy = 6 + Math.floor(idx / 4) * 20 + 10;
+    s += R(cx - 15, cy - 8, 30, 16, W, 3, I) + T(cx, cy + 5, 12, tiles[i][1], I);
+  }
+  s += R(70 + 1 * 37.5, 6 + 1 * 20, 37.5, 20, k, 3) + SP(30, 20, 6, W) + SP(234, 70, 5, W);
+  return s;
+};
+ART.luminGrid = function (k) {
+  var s = R(70, 6, 150, 80, 'none', 8, I), i, lit = [[0, 0], [1, 0], [0, 1], [2, 2], [4, 1], [3, 3], [1, 4], [2, 3]];
+  for (i = 1; i < 5; i++) s += L(70 + i * 30, 6, 70 + i * 30, 86, I, 1.2, ' stroke-opacity=' + Q + '.3' + Q + '');
+  for (i = 1; i < 4; i++) s += L(70, 6 + i * 20, 220, 6 + i * 20, I, 1.2, ' stroke-opacity=' + Q + '.3' + Q + '');
+  for (i = 0; i < lit.length; i++) {
+    var cx = 70 + lit[i][0] * 30 + 15, cy = 6 + lit[i][1] * 20 + 10;
+    s += C(cx, cy, 7, W, 0, 0, ' opacity=' + Q + '.9' + Q + '') + C(cx, cy, 11, 'rgba(255,255,255,.25)');
+  }
+  s += C(70 + 2 * 30 + 15, 6 + 2 * 20 + 10, 7, k) + SP(30, 46, 7, W);
+  return s;
+};
+ART.pipeFlow = function (k) {
+  var s = R(70, 6, 150, 80, 'none', 8, I), i;
+  for (i = 1; i < 5; i++) s += L(70 + i * 30, 6, 70 + i * 30, 86, I, 1, ' stroke-opacity=' + Q + '.25' + Q + '');
+  for (i = 1; i < 4; i++) s += L(70, 6 + i * 20, 220, 6 + i * 20, I, 1, ' stroke-opacity=' + Q + '.25' + Q + '');
+  s += P('M85 16H145V46H175', 0, k, 7) + P('M85 16H145V46H175', 0, W, 2, DOT);
+  s += C(85, 16, 4, I) + C(175, 46, 4, I);
+  s += R(100, 60, 60, 16, I, 3) + C(110, 68, 3, W) + C(150, 68, 3, W);
+  return s;
+};
+ART.hamiltonHop = function (k) {
+  var s = R(70, 6, 150, 80, 'none', 8, I), i;
+  for (i = 1; i < 5; i++) s += L(70 + i * 30, 6, 70 + i * 30, 86, I, 1, ' stroke-opacity=' + Q + '.25' + Q + '');
+  for (i = 1; i < 4; i++) s += L(70, 6 + i * 20, 220, 6 + i * 20, I, 1, ' stroke-opacity=' + Q + '.25' + Q + '');
+  s += P('M85 16L115 36L145 16L175 36L145 56L175 76', 0, k, 5, ' stroke-linecap=' + Q + 'round' + Q + '');
+  s += C(85, 16, 5, W, I, 2) + STAR(175, 76, 8, W);
+  return s;
+};
+
+/* ---------- Trivia v2 (TQ icon + question bubble, matches original trivia style) ---------- */
+ART.triviaSpace = function (k) {
+  return TQ(P('M22 40L34 8L46 40Z', W, I, 2) + C(34, 20, 4, I) + P('M28 40Q34 52 40 40', 0, k, 3));
+};
+ART.triviaCapitals = function (k) {
+  return TQ(C(34, 24, 18, 0, I, 3) + E(34, 24, 18, 8, 0, I, 2) + L(16, 24, 52, 24, I, 2) + P('M24 10Q34 24 24 38M44 10Q34 24 44 38', 0, I, 2));
+};
+ART.triviaArt = function (k) {
+  return TQ(P('M14 30Q10 10 34 8Q58 8 56 26Q54 38 40 36Q42 44 32 46Q18 46 14 30Z', W, I, 2) + C(24 - 2, 22, 2.6, k) + C(38, 16, 2.6, I) + C(46, 26, 2.6, 'rgba(255,255,255,.7)'));
+};
+ART.triviaLiterature = function (k) {
+  return TQ(P('M12 14H34V42H12Z', W, I, 2) + P('M56 14H34V42H56Z', W, I, 2) + L(34, 14, 34, 42, I, 1.5) + L(16, 24, 30, 24, I, 1) + L(16, 32, 30, 32, I, 1));
+};
+ART.triviaTech = function (k) {
+  return TQ(R(16, 14, 36, 26, I, 3) + R(24, 20, 20, 14, k, 2) + L(22, 14, 22, 6, I, 2) + L(46, 14, 46, 6, I, 2) + L(22, 40, 22, 48, I, 2) + L(46, 40, 46, 48, I, 2));
+};
+ART.triviaMythology = function (k) {
+  return TQ(P('M8 30Q20 10 34 24Q48 10 60 30', 0, W, 3) + STAR(34, 14, 6, W) + C(34, 14, 2, k));
+};
+ART.triviaCars = function (k) {
+  return TQ(P('M8 32Q10 16 24 14H44Q56 16 58 32Z', W, I, 2) + C(20, 34, 5, I) + C(48, 34, 5, I) + R(24, 18, 18, 8, k, 1));
+};
+ART.triviaRetro = function (k) {
+  return TQ(R(10, 12, 48, 24, I, 3) + C(22, 24, 5, W, I, 1.5) + L(17, 24, 27, 24, W, 2) + L(22, 19, 22, 29, W, 2) + C(44, 20, 3, k) + C(52, 24, 3, k));
+};
+ART.triviaOcean = function (k) {
+  return TQ(P('M6 26Q16 18 26 26T46 26T62 26', 0, W, 3) + P('M6 36Q16 28 26 36T46 36T62 36', 0, W, 2, ' stroke-opacity=' + Q + '.6' + Q + '') + C(34, 14, 6, I));
+};
+ART.triviaBody = function (k) {
+  return TQ(C(34, 12, 8, W, I, 2) + P('M20 44Q20 26 34 26Q48 26 48 44', 0, W, 2) + L(34, 26, 34, 44, I, 1.4, DOT));
+};
+ART.triviaFlags = function (k) {
+  return TQ(L(14, 8, 14, 44, I, 3) + P('M14 8H46V28H14Z', W, I, 2) + L(14, 14, 46, 14, k, 4) + L(14, 22, 46, 22, k, 4));
+};
+
+/* ---------- Idle v2 ---------- */
+ART.pixelBakery = function (k) {
+  return idleArt(R(100, 38, 58, 30, W, 4, I) + E(129, 38, 29, 8, k) + C(129, 30, 8, W, I, 2) + T(129, 34, 11, '\u2740', I), k);
+};
+ART.galaxyHarvest = function (k) {
+  return idleArt(C(129, 40, 18, 0, W, 2.5) + C(120, 34, 3, W) + C(136, 44, 2.4, W) + SP(96, 24, 6, W) + SP(164, 50, 5, W), k);
+};
+ART.fungalEmpire = function (k) {
+  return idleArt(P('M110 50Q110 30 129 30Q148 30 148 50Z', W, I, 1.5) + C(118, 38, 2.6, k) + C(132, 34, 2.6, k) + C(140, 44, 2.6, k) + L(129, 50, 129, 64, W, 4), k);
+};
+ART.goldRushTycoon = function (k) {
+  return idleArt(P('M129 24L139 48H119Z', W, I, 1.5) + L(129, 48, 129, 64, W, 4) + C(100, 52, 7, k, I, 1.5) + C(158, 52, 7, k, I, 1.5), k);
+};
+ART.aquaFarm = function (k) {
+  return idleArt(P('M110 46Q129 30 148 46Q129 58 110 46Z', W, I, 1.5) + C(125, 46, 2, I) + P('M96 60Q110 52 124 60T152 60T166 60', 0, W, 2), k);
+};
+ART.volcanicForge = function (k) {
+  return idleArt(P('M105 58L129 24L153 58Z', W, I, 1.5) + C(129, 44, 4, k) + R(118, 58, 22, 10, I), k);
+};
+ART.junkyardEmpire = function (k) {
+  return idleArt(C(129, 42, 14, 0, W, 3.5) + C(129, 42, 5, W) + L(115, 42, 123, 42, W, 3) + L(135, 42, 143, 42, W, 3) + L(129, 28, 129, 36, W, 3) + L(129, 48, 129, 56, W, 3), k);
+};
+ART.glacierHarvest = function (k) {
+  return idleArt(P('M129 22L148 52H110Z', 'rgba(77,166,255,.55)') + P('M129 32L140 52H118Z', W, I, 1.5), k);
+};
+ART.beeKingdom = function (k) {
+  return idleArt(E(129, 42, 18, 16, W, I, 1.5) + L(118, 42, 140, 42, k, 2) + L(122, 32, 122, 52, k, 1.5) + L(136, 32, 136, 52, k, 1.5) + E(154, 30, 7, 5, W, I, 1.2) + P('M150 34L154 30', 0, I, 1.4), k);
+};
+ART.zenGarden = function (k) {
+  return idleArt(C(100, 50, 2, 0, W, 1.2) + C(100, 50, 6, 0, W, 1.2) + C(100, 50, 10, 0, W, 1.2) + P('M140 36Q148 24 158 36Q150 44 140 36Z', W, I, 1.5), k);
+};
+ART.candyFactory = function (k) {
+  return idleArt(C(129, 40, 12, W, I, 2) + T(129, 44, 12, '\u2726', I) + L(129, 52, 129, 64, W, 4), k);
+};
+ART.shipyardEmpire = function (k) {
+  return idleArt(P('M105 50H153L146 60H112Z', W, I, 1.5) + L(129, 50, 129, 26, W, 3) + P('M129 26L146 34L129 42Z', k), k);
+};
+ART.desertOasis = function (k) {
+  return idleArt(P('M118 60Q118 34 129 20Q140 34 140 60Z', W, I, 1.5) + L(129, 20, 129, 60, I, 1.4) + C(154, 56, 5, 'rgba(47,211,199,.65)'), k);
+};
+ART.roboticsLab = function (k) {
+  return idleArt(R(117, 30, 24, 20, W, 3, I) + C(123, 38, 2.4, I) + C(135, 38, 2.4, I) + L(129, 30, 129, 22, W, 2) + C(129, 20, 2.4, k) + L(129, 50, 129, 62, W, 3), k);
+};
+ART.metroEmpire = function (k) {
+  return idleArt(R(106, 36, 46, 20, W, 4, I) + C(116, 56, 4, I) + C(142, 56, 4, I) + R(112, 42, 10, 8, k, 1) + R(126, 42, 10, 8, k, 1) + R(140, 42, 8, 8, k, 1), k);
+};
+ART.skyCityBuilder = function (k) {
+  return idleArt(E(129, 36, 22, 9, W) + E(118, 40, 11, 6, W) + R(116, 44, 10, 18, W, 0, I) + R(132, 38, 10, 24, W, 0, I) + R(145, 46, 8, 16, W, 0, I), k);
+};
+ART.chronoEmpire = function (k) {
+  return idleArt(C(129, 42, 16, W, I, 3) + L(129, 42, 129, 30, I, 2) + L(129, 42, 138, 48, I, 2) + C(129, 42, 2, k), k);
+};
+
+/* ---------- RPG v2 ---------- */
+ART.pirateCove = function (k) {
+  return rpgArt(C(129, 60, 12, 0, W, 3) + L(123, 60, 135, 60, W, 2) + L(129, 48, 129, 72, W, 2) + P('M110 60Q119 52 129 60Q139 52 148 60', 0, W, 2), k);
+};
+ART.cyberArena = function (k) {
+  return rpgArt(R(112, 48, 34, 20, M, 4, I) + L(118, 54, 140, 54, k, 2) + L(118, 60, 134, 60, k, 2) + L(129, 48, 129, 40, W, 2), k);
+};
+ART.monsterGauntlet = function (k) {
+  return rpgArt(P('M112 70Q112 46 129 46Q146 46 146 70Z', M) + P('M118 56L124 66M140 56L134 66', 0, W, 3) + C(129, 62, 2.2, W), k);
+};
+ART.spaceInvasionDungeon = function (k) {
+  return rpgArt(P('M108 64L129 44L150 64Z', M) + C(120, 58, 3, W) + C(138, 58, 3, W) + L(104, 70, 114, 64, W, 2) + L(154, 70, 144, 64, W, 2), k);
+};
+ART.gladiatorPit = function (k) {
+  return rpgArt(L(112, 70, 134, 44, k, 5) + C(112, 70, 4, W, I, 1.5) + P('M118 52Q129 46 140 52', 0, W, 2, DOT), k);
+};
+ART.demonSiege = function (k) {
+  return rpgArt(P('M112 56L120 40M146 56L138 40', 0, k, 4) + P('M112 70Q112 50 129 50Q146 50 146 70Z', M) + C(123, 60, 2, W) + C(135, 60, 2, W), k);
+};
+ART.frostDungeon = function (k) {
+  return rpgArt(P('M129 40L135 54L150 50L138 60L150 70L135 66L129 80L123 66L108 70L120 60L108 50L123 54Z', 'rgba(77,166,255,.65)'), k);
+};
+ART.steelArena = function (k) {
+  return rpgArt(R(110, 48, 38, 22, M, 3, I) + R(120, 42, 18, 10, W, 2, I) + C(125, 58, 2.4, k) + C(135, 58, 2.4, k), k);
+};
+ART.undeadLegion = function (k) {
+  return rpgArt(E(129, 56, 16, 18, W, I, 2) + C(122, 52, 2.4, I) + C(136, 52, 2.4, I) + P('M119 66Q129 60 139 66', 0, I, 2), k);
+};
+ART.junglePursuit = function (k) {
+  return rpgArt(P('M110 72Q110 40 129 32Q148 40 148 72Z', M) + L(129, 32, 129, 72, W, 1.4) + P('M118 50Q129 40 140 50', 0, W, 1.4), k);
+};
+ART.championsCircuit = function (k) {
+  return rpgArt(P('M118 70V46H140V70Z', W, I, 1.5) + STAR(129, 40, 10, W) + L(122, 70, 122, 76, I, 3) + L(136, 70, 136, 76, I, 3), k);
+};
+ART.mechApocalypse = function (k) {
+  return rpgArt(R(112, 46, 34, 24, M, 2, I) + C(122, 56, 3, k) + C(136, 56, 3, k) + L(129, 46, 129, 36, W, 3) + C(129, 34, 2.6, W), k);
+};
+ART.desertRaiders = function (k) {
+  return rpgArt(P('M105 68Q105 50 129 44Q153 50 153 68Z', M) + P('M118 56H140', 0, W, 2) + C(122, 50, 1.6, W) + C(136, 50, 1.6, W), k);
+};
+ART.knightsHonor = function (k) {
+  return rpgArt(P('M118 44H140V60Q140 72 129 76Q118 72 118 60Z', W, I, 2) + L(129, 44, 129, 76, I, 1.4, DOT), k);
+};
+ART.astralTyrants = function (k) {
+  return rpgArt(STAR(129, 54, 14, W) + P('M118 36H140L136 46H122Z', W, I, 1.2), k);
+};
+ART.wastelandArena = function (k) {
+  return rpgArt(C(129, 58, 13, 0, W, 3) + L(119, 48, 139, 68, W, 2) + L(139, 48, 119, 68, W, 2), k);
+};
+ART.dragonsLair = function (k) {
+  return rpgArt(P('M106 68Q106 46 129 40Q152 46 152 68Z', M) + P('M129 40L123 26M129 40L135 26', 0, W, 3) + C(121, 56, 2, W) + C(137, 56, 2, W), k);
+};
+
+/* ---------- Upgrades v2 (endless runner) ---------- */
+ART.rooftopDash = function (k) {
+  return runnerArt(R(96, 42, 20, 34, I) + R(124, 30, 18, 46, I) + R(150, 50, 16, 26, I), k);
+};
+ART.jungleSprint = function (k) {
+  return runnerArt(P('M110 76Q110 48 129 40Q148 48 148 76Z', I) + L(129, 40, 129, 76, W, 1.4), k);
+};
+ART.lavaEscape = function (k) {
+  return runnerArt(P('M100 76Q100 60 110 56Q106 68 116 64Q112 76 124 70Q122 76 134 72Q150 76 152 76Z', k), k);
+};
+ART.metroDash = function (k) {
+  return runnerArt(R(100, 48, 58, 22, I, 4) + C(112, 70, 5, I) + C(146, 70, 5, I) + R(108, 54, 12, 10, W, 1, I) + R(124, 54, 12, 10, W, 1, I) + R(140, 54, 12, 10, W, 1, I), k);
+};
+ART.iceSlide = function (k) {
+  return runnerArt(P('M129 36L136 52L152 48L140 60L152 72L136 68L129 84L122 68L106 72L118 60L106 48L122 52Z', 'rgba(47,211,199,.5)'), k);
+};
+ART.desertDash = function (k) {
+  return runnerArt(P('M96 78Q96 62 108 58Q104 70 114 66Q110 78 122 72Q118 78 132 74Q148 78 152 78Z', I), k);
+};
+ART.neonSprint = function (k) {
+  return runnerArt(R(98, 46, 62, 30, 'none', 4, W) + L(98, 61, 160, 61, W, 1, ' stroke-opacity=' + Q + '.6' + Q + '') + L(129, 46, 129, 76, W, 1, ' stroke-opacity=' + Q + '.6' + Q + '') + C(129, 61, 4, I), k);
+};
+ART.skyDiveRun = function (k) {
+  return runnerArt(E(129, 44, 20, 8, W) + E(118, 48, 10, 5, W) + L(129, 52, 129, 76, I, 2, DOT), k);
+};
+ART.pirateDeckRun = function (k) {
+  return runnerArt(C(129, 58, 12, 0, I, 3) + L(123, 58, 135, 58, I, 2) + L(129, 46, 129, 70, I, 2), k);
+};
+ART.hauntedManorRun = function (k) {
+  return runnerArt(P('M112 76V54Q112 42 129 42Q146 42 146 54V76Q142 70 138 76Q134 70 129 76Q124 70 120 76Q116 70 112 76Z', W, I, 1.8) + C(122, 52, 2, I) + C(136, 52, 2, I), k);
+};
+ART.candyRush = function (k) {
+  return runnerArt(C(129, 52, 12, W, I, 2) + T(129, 56, 12, '\u2726', I) + L(129, 64, 129, 78, I, 3), k);
+};
+ART.roboFactoryRun = function (k) {
+  return runnerArt(R(108, 48, 42, 24, I, 3) + C(119, 60, 2.4, k) + C(139, 60, 2.4, k) + L(129, 48, 129, 38, I, 2) + C(129, 36, 2.4, W), k);
+};
+ART.templeDash = function (k) {
+  return runnerArt(R(110, 40, 8, 36, I) + R(124, 40, 8, 36, I) + R(138, 40, 8, 36, I) + R(104, 36, 50, 6, I), k);
+};
+ART.stormChase = function (k) {
+  return runnerArt(P('M110 50Q110 40 122 40Q134 40 134 50Q144 50 144 60Q144 68 134 68H116Q106 68 106 60Q106 52 110 50Z', W, I, 1.6) + P('M129 60L123 70L129 70L124 80', 0, k, 2.4), k);
+};
+ART.deepSeaDash = function (k) {
+  return runnerArt(P('M108 56Q122 48 136 56Q144 50 150 54L144 58L150 62Q144 66 136 60Q122 68 108 60Z', I) + C(116, 56, 1.6, W), k);
+};
+ART.spaceportDash = function (k) {
+  return runnerArt(P('M122 76V48L129 32L136 48V76Z', W, I, 2) + P('M122 68L112 78M136 68L146 78', 0, I, 2) + E(129, 78, 7, 3, 'rgba(255,107,74,.5)'), k);
+};
+
 /* ---------- public API ---------- */
 var SLOTS = [[18, 16], [240, 14], [236, 78], [20, 76], [12, 46], [248, 48]];
 function hash(s) { var h = 0, i; for (i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
