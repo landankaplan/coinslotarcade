@@ -1142,21 +1142,6 @@ function catchArt(itemIcon, k) {
     + L(129, 8, 129, 36, I, 2, DOT)
     + L(30, 90, 228, 90, I, 1.5, ' opacity=' + Q + '.3' + Q + '');
 }
-function aimArt(centerIcon, k) {
-  // crosshair target ring + a sport-specific center icon, modeled on targetBlitz
-  return C(129, 46, 34, W, I, 4) + C(129, 46, 23, k, I, 2) + C(129, 46, 12, W)
-    + L(129, 4, 129, 14, I, 3) + L(129, 78, 129, 88, I, 3) + L(88, 46, 98, 46, I, 3) + L(160, 46, 170, 46, I, 3)
-    + centerIcon
-    + SP(50, 20, 6, W) + SP(212, 70, 5, W);
-}
-function railArt(netIcon, k) {
-  // a rally net/wall with two paddles and the ball mid-flight
-  return R(22, 12, 214, 68, 0, 3, I)
-    + netIcon
-    + G('rotate(-22 42 40)', R(38, 36, 4, 15, I, 2)) + C(48, 32, 7, I) + C(48, 32, 3, W)
-    + G('rotate(22 216 58)', R(212, 46, 4, 15, I, 2)) + C(206, 56, 7, I) + C(206, 56, 3, W)
-    + P('M60 34Q130 14 190 48', 0, I, 2, DOT) + C(198, 50, 5.5, k, I, 1.5);
-}
 function idleArt(icon, k) {
   // factory/warehouse floor + conveyor + a dark portal medallion framing the themed icon,
   // modeled on byteFarm/cloudLegion but with the medallion added so the icon reads on every
@@ -1214,25 +1199,25 @@ ART.boltDuel = function (k) {
   return duelArt('10', '\u26A1', '4', '8', k);
 };
 ART.animalWords = function (k) {
-  return wordArt(E(40, 54, 13, 10, I) + E(28, 44, 7, 6, I) + E(52, 44, 7, 6, I) + C(35, 50, 1.6, W) + C(45, 50, 1.6, W) + P('M40 64Q34 72 26 70', 0, I, 3), 'TIGER', 2, k);
+  return wordArt(P('M18 72Q22 68 26 72', 0, I, 2) + P('M30 66Q34 62 38 66', 0, I, 2) + P('M42 60Q46 56 50 60', 0, I, 2) + E(40, 54, 13, 10, I) + E(28, 44, 7, 6, I) + E(52, 44, 7, 6, I) + C(35, 50, 1.6, W) + C(45, 50, 1.6, W) + P('M40 64Q34 72 26 70', 0, I, 3), 'TIGER', 2, k);
 };
 ART.foodWords = function (k) {
-  return wordArt(C(40, 50, 18, I) + C(40, 50, 13, k) + L(40, 50, 40, 30, I, 3) + C(40, 30, 3, I) + P('M30 42Q40 36 50 42', 0, W, 2), 'NOODLE', 3, k);
+  return wordArt(P('M26 16Q24 8 28 2', 0, I, 1.4, ' stroke-opacity=' + Q + '.5' + Q + '') + P('M36 16Q34 8 38 2', 0, I, 1.4, ' stroke-opacity=' + Q + '.5' + Q + '') + C(40, 50, 18, I) + C(40, 50, 13, k) + L(40, 50, 40, 30, I, 3) + C(40, 30, 3, I) + P('M30 42Q40 36 50 42', 0, W, 2) + L(16, 46, 22, 38, I, 2) + L(58, 46, 52, 38, I, 2), 'NOODLE', 3, k);
 };
 ART.spaceWords = function (k) {
-  return wordArt(P('M40 20L50 54L40 66L30 54Z', W, I, 2) + C(40, 30, 5, k) + P('M32 56L24 70M48 56L56 70', 0, I, 3) + SP(58, 30, 6, W), 'COMET', 2, k);
+  return wordArt(C(54, 24, 9, 0, W, 1.6) + C(54, 24, 3, k) + P('M40 20L50 54L40 66L30 54Z', W, I, 2) + C(40, 30, 5, k) + P('M32 56L24 70M48 56L56 70', 0, I, 3) + SP(16, 50, 5, W), 'COMET', 2, k);
 };
 ART.sportsWords = function (k) {
-  return wordArt(C(40, 48, 17, W, I, 2.5) + P('M28 42Q40 48 52 42M28 54Q40 48 52 54M40 31V65', 0, I, 1.6), 'RELAY', 2, k);
+  return wordArt(C(40, 48, 17, W, I, 2.5) + P('M28 42Q40 48 52 42M28 54Q40 48 52 54M40 31V65', 0, I, 1.6) + E(18, 70, 7, 5, I) + C(14, 70, 1.4, W) + C(22, 70, 1.4, W) + L(25, 70, 32, 62, I, 1.6, DOT), 'RELAY', 2, k);
 };
 ART.musicWords = function (k) {
-  return wordArt(E(34, 60, 9, 7, I) + R(42, 20, 4, 42, I) + P('M42 20L62 14V26L42 32Z', I) + C(34, 60, 3, W), 'TEMPO', 2, k);
+  return wordArt(L(10, 18, 10, 56, I, 1, ' stroke-opacity=' + Q + '.3' + Q + '') + L(10, 26, 58, 26, I, 1, ' stroke-opacity=' + Q + '.3' + Q + '') + L(10, 34, 58, 34, I, 1, ' stroke-opacity=' + Q + '.3' + Q + '') + E(34, 60, 9, 7, I) + R(42, 20, 4, 42, I) + P('M42 20L62 14V26L42 32Z', I) + C(34, 60, 3, W), 'TEMPO', 2, k);
 };
 ART.natureWords = function (k) {
-  return wordArt(P('M22 70Q22 36 40 20Q58 36 58 70Z', I) + L(40, 20, 40, 70, W, 2) + P('M40 34Q50 30 56 36M40 48Q28 44 24 50', 0, W, 2), 'CANYON', 3, k);
+  return wordArt(C(54, 18, 8, W) + P('M22 70Q22 36 40 20Q58 36 58 70Z', I) + L(40, 20, 40, 70, W, 2) + P('M40 34Q50 30 56 36M40 48Q28 44 24 50', 0, W, 2) + P('M12 70L18 54L24 70Z', I) + L(18, 70, 18, 58, W, 1.2), 'CANYON', 3, k);
 };
 ART.techWords = function (k) {
-  return wordArt(R(20, 36, 40, 28, I, 4) + R(28, 44, 24, 12, k, 2) + L(26, 36, 26, 26, I, 2) + L(54, 36, 54, 26, I, 2) + L(26, 64, 26, 74, I, 2) + L(54, 64, 54, 74, I, 2), 'BACKUP', 2, k);
+  return wordArt(R(20, 36, 40, 28, I, 4) + R(28, 44, 24, 12, k, 2) + L(26, 36, 26, 26, I, 2) + L(54, 36, 54, 26, I, 2) + L(26, 64, 26, 74, I, 2) + L(54, 64, 54, 74, I, 2) + T(14, 18, 10, '10', I) + T(50, 18, 10, '01', I), 'BACKUP', 2, k);
 };
 
 /* ---------- Board & Strategy v2 (dropConnect3d / flipGrid3d / nimStones3d) ---------- */
@@ -1302,27 +1287,71 @@ ART.emberCatch = function (k) {
   return catchArt(P('M129 10Q116 26 129 38Q142 26 129 10Z', k, I, 1.5) + P('M129 18Q123 26 129 32Q135 26 129 18Z', W), k);
 };
 
-/* ---------- Sports v2 (aimTarget3d / railSport3d) ---------- */
+/* ---------- Sports v2 (bespoke per-sport scenes) ---------- */
+
 ART.cornerKick = function (k) {
-  return aimArt(C(129, 46, 10, W, I, 2) + P('M124 40L129 44L134 40L132 48L136 52L128 52L124 56L124 50L120 46Z', I), k);
+  var net = '';
+  for (var nx = 194; nx <= 226; nx += 8) net += L(nx, 20, nx, 60, I, 1, ' stroke-opacity=' + Q + '.35' + Q + '');
+  for (var ny = 24; ny <= 56; ny += 8) net += L(190, ny, 230, ny, I, 1, ' stroke-opacity=' + Q + '.35' + Q + '');
+  return L(4, 88, 254, 88, I, 3) + P('M4 82Q10 85 16 82', 0, I, 1.4) + P('M28 84Q34 87 40 84', 0, I, 1.4)
+    + L(190, 18, 190, 60, I, 4) + L(230, 18, 230, 60, I, 4) + L(190, 18, 230, 18, I, 4) + net
+    + L(14, 80, 14, 28, I, 2) + P('M14 28L32 34L14 40Z', k)
+    + P('M98 56Q146 28 186 42', 0, I, 2, DOT)
+    + C(90, 58, 13, W, I, 2) + P('M90 48L97 53L94 62H86L83 53Z', I) + L(90, 45, 90, 48, I, 1.2) + L(79, 58, 83, 53, I, 1.2) + L(101, 58, 97, 53, I, 1.2);
 };
 ART.freeThrowHoop = function (k) {
-  return aimArt(C(129, 46, 10, k, I, 2) + P('M121 40Q129 44 137 40M121 52Q129 48 137 52M129 36V56', 0, I, 1.4), k);
+  var net = P('M176 50L182 72M182 50L186 72M194 50L190 72M200 50L194 72', 0, I, 1.4);
+  return R(0, 86, 258, 6, I) + L(40, 80, 112, 80, I, 2)
+    + R(202, 8, 28, 36, I, 2) + R(208, 14, 16, 10, 0, 1, W)
+    + R(228, 6, 7, 74, I, 2)
+    + E(188, 48, 16, 4, 0, I, 3) + net
+    + P('M82 48Q132 8 176 46', 0, I, 2, DOT)
+    + C(68, 38, 13, W, I, 2.5) + P('M56 38Q68 25 80 38M68 26V50M56 38Q68 51 80 38', 0, I, 1.6)
+    + R(4, 4, 32, 16, I, 2) + T(20, 16, 11, '21', W);
 };
 ART.archeryRange = function (k) {
-  return aimArt(C(129, 46, 11, W, I, 2.5) + C(129, 46, 5, k) + L(100, 46, 118, 46, I, 2) + P('M100 40L92 46L100 52Z', I), k);
+  return L(4, 88, 254, 88, I, 2) + P('M4 82Q10 85 16 82', 0, I, 1.4) + P('M184 84Q190 87 196 84', 0, I, 1.4)
+    + L(220, 18, 220, 82, I, 3) + C(220, 36, 24, I) + C(220, 36, 18, W) + C(220, 36, 12, k) + C(220, 36, 6, W)
+    + P('M40 18Q58 46 40 74', 0, I, 3) + L(40, 18, 40, 74, I, 1.2, DOT)
+    + L(40, 46, 94, 46, I, 2.5) + P('M40 46L29 41L29 51Z', I)
+    + P('M94 46Q146 36 192 36', 0, I, 2, DOT) + L(186, 36, 202, 36, I, 2.5) + P('M202 36L193 31L193 41Z', I);
 };
 ART.horseshoePit = function (k) {
-  return aimArt(P('M118 36A14 14 0 1 0 140 36', 0, W, 6) + L(129, 60, 129, 70, I, 3), k);
+  var sand = '', sx;
+  for (sx = 6; sx < 254; sx += 16) sand += C(sx, 80 + (sx % 32 ? 2 : -2), 1, I, 0, 0, ' opacity=' + Q + '.4' + Q + '');
+  return R(0, 76, 258, 16, I) + sand
+    + L(50, 24, 50, 76, I, 4) + C(50, 22, 3.5, W)
+    + L(216, 50, 216, 76, I, 2) + C(216, 49, 2.4, W)
+    + P('M114 24A18 18 0 1 0 150 24', 0, W, 7) + C(114, 24, 3, I) + C(150, 24, 3, I)
+    + P('M70 60Q90 22 118 20', 0, I, 2, DOT)
+    + E(46, 78, 7, 2.2, 'rgba(255,255,255,.3)') + E(58, 80, 5, 1.8, 'rgba(255,255,255,.25)');
 };
 ART.shotPutField = function (k) {
-  return aimArt(C(129, 46, 9, k, I, 2) + P('M129 46Q160 30 190 40', 0, I, 2, DOT) + C(192, 40, 4, W), k);
+  return L(4, 88, 254, 88, I, 2)
+    + P('M14 88A32 32 0 0 1 14 24', 0, I, 3) + L(14, 24, 14, 10, I, 1.4, DOT) + L(14, 88, 14, 76, I, 1.4, DOT)
+    + L(220, 32, 254, 18, I, 1.4, ' stroke-opacity=' + Q + '.4' + Q + '') + L(220, 44, 254, 52, I, 1.4, ' stroke-opacity=' + Q + '.4' + Q + '')
+    + C(52, 38, 8, I) + P('M44 46Q40 60 46 78H60Q62 60 58 46Z', I) + L(58, 50, 82, 36, I, 5)
+    + C(84, 34, 7, W, I, 2)
+    + P('M84 34Q150 8 220 38', 0, I, 2, DOT)
+    + L(226, 38, 226, 16, I, 2) + P('M226 16L244 22L226 28Z', k);
 };
 ART.squashWall = function (k) {
-  return railArt(L(22, 12, 22, 80, I, 4) + L(22, 12, 236, 12, I, 2, ' stroke-opacity=' + Q + '.4' + Q + ''), k);
+  var marks = C(160, 24, 2, I, 0, 0, ' opacity=' + Q + '.4' + Q + '') + C(120, 18, 1.6, I, 0, 0, ' opacity=' + Q + '.35' + Q + '');
+  return R(22, 12, 214, 68, 'none', 3, I) + L(22, 12, 236, 12, I, 2.5, ' stroke-opacity=' + Q + '.5' + Q + '') + marks
+    + L(22, 60, 236, 60, I, 1.2, DOT)
+    + C(56, 58, 8, I) + P('M48 66Q44 78 48 86H64Q66 78 62 66Z', I) + L(62, 70, 82, 54, I, 4) + E(84, 51, 8, 4, 0, I, 2.5)
+    + P('M90 50Q150 18 208 38Q224 44 210 60', 0, I, 2, DOT) + C(210, 60, 5.5, W, I, 1.5);
 };
 ART.badmintonRally = function (k) {
-  return railArt(L(129, 12, 129, 80, I, 2, DOT) + P('M120 44L129 32L138 44Z', W, I, 1.5) + L(129, 44, 129, 50, I, 2), k);
+  var mesh = '';
+  for (var my = 16; my <= 76; my += 9) mesh += L(124, my, 134, my + 5, I, 1, ' stroke-opacity=' + Q + '.3' + Q + '');
+  return R(34, 10, 190, 72, 'none', 0, I)
+    + L(84, 10, 84, 82, I, 1.2, ' stroke-opacity=' + Q + '.35' + Q + '') + L(174, 10, 174, 82, I, 1.2, ' stroke-opacity=' + Q + '.35' + Q + '')
+    + L(129, 8, 129, 84, I, 2.5) + P('M122 8H136', 0, I, 4) + mesh
+    + E(195, 84, 14, 3, 'rgba(11,5,24,.25)')
+    + G('rotate(-24 78 46)', E(78, 38, 13, 17, 0, I, 3) + P('M78 21V55M66 38H90M68 29Q78 34 88 29M68 47Q78 42 88 47', 0, I, 1) + R(74, 55, 8, 24, I, 3))
+    + P('M100 34Q150 8 186 26', 0, I, 2, DOT)
+    + C(192, 24, 3.2, W, I, 1.4) + P('M192 24L182 10L202 10Z', 0, W, 1.4) + L(192, 24, 186, 13, I, 0.8) + L(192, 24, 198, 13, I, 0.8);
 };
 
 /* ---------- Puzzle v2 (slidingBlocks3d / gridLights3d / pathConnect3d / numberChain3d) ---------- */
