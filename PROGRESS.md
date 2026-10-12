@@ -122,6 +122,35 @@ looking scenes per theme) -- the underlying MECHANICS still come from the same 1
 functions per the original scope tradeoff (108 bespoke games was never going to happen in one pass).
 If the user wants genuinely different mechanics per game later, that's a separate, much larger task.
 
+## Visitor analytics (Vercel Web Analytics)
+
+User asked to see how many people visit the site and when. Added Vercel Web Analytics (already on
+Vercel, no new account, free up to 50,000 events/month on the Hobby plan -- this site is nowhere near
+that). Two script tags appended to the end of index.html (plain-HTML integration, no npm package needed):
+
+  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+  <script defer src="/_vercel/insights/script.js"></script>
+
+Real limitations, stated plainly: Hobby plan only keeps 1 month of history, and collection pauses
+(3-day grace period, then resumes after 7 days) if the 50k events/month cap is ever hit -- Vercel won't
+bill a Hobby project for overage, it just stops counting for a while. Shows pageviews, visitors,
+top pages, referrers, device/browser/country -- no funnels or deep behavior data.
+
+Enabling it requires one manual step only the user can do: clicking "Enable" under the Analytics tab
+for this project in the Vercel dashboard. There's no API/MCP call that flips this flag -- confirmed via
+Vercel's own docs (dashboard button or `vercel project web-analytics` CLI, both interactive/manual).
+Until that's clicked, the script tags are harmless no-ops.
+
+Honesty fix made alongside this: the site's own footer said "no frameworks, no tracking" -- which would
+have become a false claim the moment this landed, since Web Analytics IS tracking (just cookieless and
+anonymized). Changed it to "no frameworks, no cookies, just cookie-free visit analytics." and added an
+"Analytics" section to privacy.html disclosing what Vercel Web Analytics collects (page URL, coarse
+geolocation, device/browser, referrer; cookieless; 24-hour-only visitor hash; aggregated only).
+
+Verified: ran build.sh clean, confirmed the script tag appears exactly once in public/index.html and
+"no tracking" no longer appears anywhere in the built output.
+
 ## Next step
-None queued. All 9 categories at 20+ games, visual-quality pass complete and verified. Awaiting user
-direction on whether this is sufficient or whether a mechanics-diversification pass is wanted next.
+Nothing else queued on cover art or analytics. User still needs to: (1) click Enable under
+Analytics in the Vercel project dashboard after this deploys, and (2) run the push command to actually
+ship both the sports/word-reveal art rework and this analytics change to production.
