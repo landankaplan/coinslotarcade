@@ -80,7 +80,7 @@ echo "Reflex extras OK: $G15_SUM"
 # --- Sports v2 extras (g16.js): same chain/wrap pattern. Adds aimTarget3d x5 + railSport3d x2,
 # bringing Sports from 13 to 20. ---
 G16_SUM=$(md5sum g16.js | awk '{print $1}')
-if [ "$G16_SUM" != "9de74355b7b50ca2ed0b5ebf501d2816" ]; then
+if [ "$G16_SUM" != "053c026f386491ffcb28f6531d426512" ]; then
   echo "G16 BUNDLE MISMATCH: got $G16_SUM"
   exit 1
 fi

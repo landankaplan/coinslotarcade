@@ -391,11 +391,14 @@ function volleyTiming3d(id,cfg){
   def(id,cfg.title,cfg.color,cfg.tagline,'Tap LEFT / CENTER / RIGHT the instant the shuttle is in that zone to return it · first to 11',function(G){
     var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
     var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
-    var barWrap=document.createElement('div');barWrap.style.cssText='width:100%;height:30px;border-radius:15px;background:'+R.grid+';position:relative;overflow:hidden;';
-    var z1=document.createElement('div');z1.style.cssText='position:absolute;left:0;top:0;bottom:0;width:33.33%;border-right:1px solid rgba(255,255,255,.15);';barWrap.appendChild(z1);
-    var z2=document.createElement('div');z2.style.cssText='position:absolute;left:33.33%;top:0;bottom:0;width:33.34%;border-right:1px solid rgba(255,255,255,.15);';barWrap.appendChild(z2);
-    var shuttle=document.createElement('div');shuttle.style.cssText='position:absolute;top:7px;bottom:7px;width:14px;border-radius:7px;background:#fff;left:0%;';barWrap.appendChild(shuttle);
-    wrap.appendChild(barWrap);
+    var courtWrap=document.createElement('div');courtWrap.style.cssText='width:100%;border-radius:10px;overflow:hidden;background:#0d3a2a;border:2px solid rgba(255,255,255,.35);';wrap.appendChild(courtWrap);
+    var barWrap=document.createElement('div');barWrap.style.cssText='width:100%;height:64px;position:relative;background:repeating-linear-gradient(90deg,#0d3a2a,#0d3a2a 11.11%,#113f2e 11.11%,#113f2e 22.22%);';courtWrap.appendChild(barWrap);
+    var z1=document.createElement('div');z1.style.cssText='position:absolute;left:0;top:0;bottom:0;width:33.33%;';barWrap.appendChild(z1);
+    var z2=document.createElement('div');z2.style.cssText='position:absolute;left:33.33%;top:0;bottom:0;width:33.34%;';barWrap.appendChild(z2);
+    var netLine=document.createElement('div');netLine.style.cssText='position:absolute;left:50%;top:0;bottom:0;width:0;border-left:3px dashed rgba(255,255,255,.75);';barWrap.appendChild(netLine);
+    var netTag=document.createElement('div');netTag.textContent='NET';netTag.style.cssText='position:absolute;left:50%;top:2px;transform:translateX(-50%);font-size:.6rem;font-weight:800;letter-spacing:.08em;color:rgba(255,255,255,.75);';barWrap.appendChild(netTag);
+    var shuttle=document.createElement('div');shuttle.textContent='\ud83c\udff8';shuttle.style.cssText='position:absolute;top:50%;width:26px;height:26px;margin-top:-13px;margin-left:-13px;font-size:1.4rem;line-height:26px;text-align:center;left:0%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));transition:left .05s linear;';barWrap.appendChild(shuttle);
+    var courtLines=document.createElement('div');courtLines.style.cssText='position:absolute;left:4px;right:4px;top:4px;bottom:4px;border:1px solid rgba(255,255,255,.25);pointer-events:none;';barWrap.appendChild(courtLines);
     var row=document.createElement('div');row.style.cssText='display:flex;gap:8px;width:100%;';
     var ZONES=['LEFT','CENTER','RIGHT'];
     ZONES.forEach(function(z,i){var b=document.createElement('button');b.type='button';b.textContent=z;b.style.cssText='flex:1;padding:14px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';b.addEventListener('pointerdown',function(){trySwing(i)});row.appendChild(b)});
