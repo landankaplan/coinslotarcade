@@ -176,9 +176,9 @@ function aimTarget3d(id,cfg){
 }
 aimTarget3d('cornerKick',{title:'Corner Kick',tagline:'Curl a corner kick into the goal — lock your aim, then your power, six tries to rack up points.',color:R.green,scoreMode:'target',idealPower:.55,perfectLabel:'Top corner! Goal!',goodLabel:'Goal!',missLabel:'Saved — off target.'});
 aimTarget3d('freeThrowHoop',{title:'Free Throw Hoop',tagline:'Line up the free throw and swish six shots in a row for a big score.',color:R.orange,scoreMode:'target',idealPower:.5,perfectLabel:'Nothing but net!',goodLabel:'Good shot!',missLabel:'Rimmed out.'});
-aimTarget3d('archeryRange',{title:'Archery Range',tagline:'Steady your aim and draw the bow — chase a perfect bullseye over six arrows.',color:R.yellow,scoreMode:'target',idealPower:.5,perfectLabel:'Bullseye!',goodLabel:'Inner ring!',missLabel:'Outer ring.'});
-aimTarget3d('horseshoePit',{title:'Horseshoe Pit',tagline:'Toss horseshoes at the stake — six throws, closest ringers win the most points.',color:R.coral,scoreMode:'target',idealPower:.6,perfectLabel:'Ringer!',goodLabel:'Close one!',missLabel:'Wide of the stake.'});
-aimTarget3d('shotPutField',{title:'Shot Put Field',tagline:'Build up power and stay in the sector for the longest put across six attempts.',color:R.blue,scoreMode:'distance',maxDistance:22,unit:'m'});
+chargeRelease3d('archeryRange',{title:'Archery Range',tagline:'Steady your aim and draw the bow — chase a perfect bullseye over six arrows.',color:R.yellow,scoreMode:'target',idealPower:.5,perfectLabel:'Bullseye!',goodLabel:'Inner ring!',missLabel:'Outer ring.'});
+chargeRelease3d('horseshoePit',{title:'Horseshoe Pit',tagline:'Toss horseshoes at the stake — six throws, closest ringers win the most points.',color:R.coral,scoreMode:'target',idealPower:.6,perfectLabel:'Ringer!',goodLabel:'Close one!',missLabel:'Wide of the stake.'});
+chargeRelease3d('shotPutField',{title:'Shot Put Field',tagline:'Build up power and stay in the sector for the longest put across six attempts.',color:R.blue,scoreMode:'distance',maxDistance:22,unit:'m'});
 
 /* ================= railSport3d: lane-based paddle rally, single-player wall OR vs simple AI ================= */
 function railSport3d(id,cfg){
@@ -272,6 +272,75 @@ function railSport3d(id,cfg){
 }
 railSport3d('squashWall',{title:'Squash Wall',tagline:'Rally against the back wall solo — the ball speeds up with every return.',color:R.teal,vsAi:!1,startSpeed:3.4,maxSpeed:8});
 railSport3d('badmintonRally',{title:'Badminton Rally',tagline:'Trade volleys with the house across the net — first to 11 points wins the match.',color:R.magenta,vsAi:!0,startSpeed:3.2,maxSpeed:6.5,aiSpeed:3.6});
+
+/* ================= chargeRelease3d: hold to charge power while steering aim live, release to shoot ================= */
+function chargeRelease3d(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Hold SPACE (or the button) to charge power, steer with Left/Right while charging, release to shoot · 6 rounds',function(G){
+    var ROUNDS=6;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var aimWrap=document.createElement('div');aimWrap.style.cssText='width:100%;height:14px;border-radius:7px;background:'+R.grid+';position:relative;overflow:hidden;';
+    var aimFill=document.createElement('div');aimFill.style.cssText='position:absolute;top:0;bottom:0;width:4px;background:#fff;border-radius:2px;left:50%;';aimWrap.appendChild(aimFill);
+    var powerWrap=document.createElement('div');powerWrap.style.cssText='width:100%;height:18px;border-radius:9px;background:'+R.grid+';position:relative;overflow:hidden;';
+    var powerFill=document.createElement('div');powerFill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:0%;background:'+cfg.color+';border-radius:9px;';powerWrap.appendChild(powerFill);
+    wrap.appendChild(aimWrap);wrap.appendChild(powerWrap);
+    var holdBtn=document.createElement('button');holdBtn.type='button';holdBtn.textContent='HOLD TO CHARGE';holdBtn.style.cssText='width:100%;padding:14px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;font-size:1rem;';wrap.appendChild(holdBtn);
+    var steerRow=document.createElement('div');steerRow.style.cssText='display:flex;gap:10px;width:100%;';
+    var leftBtn=document.createElement('button');leftBtn.type='button';leftBtn.textContent='◀ AIM';leftBtn.style.cssText='flex:1;padding:10px;border-radius:8px;border:none;background:'+R.grid+';color:'+R.ink+';font-weight:700;cursor:pointer;';
+    var rightBtn=document.createElement('button');rightBtn.type='button';rightBtn.textContent='AIM ▶';rightBtn.style.cssText='flex:1;padding:10px;border-radius:8px;border:none;background:'+R.grid+';color:'+R.ink+';font-weight:700;cursor:pointer;';
+    steerRow.appendChild(leftBtn);steerRow.appendChild(rightBtn);wrap.appendChild(steerRow);
+    var aimVal,chargeT,powerVal,charging,round,total,steerDir,ended;
+    function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c||R.ink}
+    function updateHud(){G.hud([['ROUND',round+'/'+ROUNDS],['SCORE',total]])}
+    function scoreFor(aim,pw){
+      if(cfg.scoreMode==='distance'){
+        var fair=Math.abs(aim-.5)<.32;
+        if(!fair)return{pts:0,label:'Foul! Off to the side.',good:!1};
+        var dist=Math.round(pw*cfg.maxDistance);
+        return{pts:Math.round(pw*100),label:'Distance: '+dist+' '+(cfg.unit||'m'),good:pw>.7};
+      }
+      var aimErr=Math.abs(aim-.5)*2,powerErr=Math.abs(pw-(cfg.idealPower||.5))*2;
+      var err=Math.min(1,(aimErr*.6+powerErr*.4));
+      var acc=1-err,pts=Math.round(acc*100);
+      if(acc>.92)return{pts:pts+30,label:cfg.perfectLabel||'Perfect!',good:!0};
+      if(acc>.6)return{pts:pts,label:cfg.goodLabel||'Nice shot!',good:!0};
+      return{pts:Math.max(0,pts),label:cfg.missLabel||'Off target.',good:!1};
+    }
+    function startCharge(){if(ended||charging)return;charging=!0;chargeT=0;powerVal=0;holdBtn.textContent='RELEASE TO SHOOT!'}
+    function release(){
+      if(ended||!charging)return;
+      charging=!1;var res=scoreFor(aimVal,powerVal);
+      holdBtn.textContent='…';holdBtn.disabled=!0;
+      G.later(function(){
+        total+=res.pts;updateHud();updateMsg(res.label+' +'+res.pts,res.good?R.green:R.coral);
+        G.later(nextRound,650);
+      },300);
+    }
+    holdBtn.addEventListener('pointerdown',startCharge);
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){holdBtn.addEventListener(ev,release)});
+    leftBtn.addEventListener('pointerdown',function(){steerDir=-1});rightBtn.addEventListener('pointerdown',function(){steerDir=1});
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){leftBtn.addEventListener(ev,function(){if(steerDir===-1)steerDir=0});rightBtn.addEventListener(ev,function(){if(steerDir===1)steerDir=0})});
+    G.press=function(k){if(k===' ')startCharge();else if(k==='ArrowLeft')steerDir=-1;else if(k==='ArrowRight')steerDir=1};
+    G.on(document,'keyup',function(e){if(e.key===' ')release();else if(e.key==='ArrowLeft'&&steerDir===-1)steerDir=0;else if(e.key==='ArrowRight'&&steerDir===1)steerDir=0});
+    function nextRound(){
+      if(round>=ROUNDS){G.over(total,'Final score: '+total+' over '+ROUNDS+' rounds');return}
+      round++;aimVal=.5;chargeT=0;powerVal=0;charging=!1;steerDir=0;holdBtn.disabled=!1;holdBtn.textContent='HOLD TO CHARGE';
+      updateMsg('Round '+round+' — hold to charge, steer to aim!',cfg.color);updateHud();
+    }
+    function tick(dt){
+      aimVal=clamp(aimVal+steerDir*dt*.6,0,1);
+      aimFill.style.left=(aimVal*100)+'%';
+      if(charging){
+        chargeT+=dt*.8;
+        var cyc=chargeT%2;
+        powerVal=cyc<1?cyc:2-cyc;
+        powerFill.style.width=(powerVal*100)+'%';
+      }
+    }
+    G.begin(function(){round=0;total=0;steerDir=0;nextRound();G.frame(tick)})
+  });
+}
+
 
 }
 })();

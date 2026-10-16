@@ -105,7 +105,7 @@ function dropConnect3d(id,cfg){
       glowOrbs(scene,[[-fhw,ftop,-.25],[fhw,ftop,-.25],[-fhw,fbot,-.25],[fhw,fbot,-.25]],colorNum0);
       var particles=makeParticlePool();
       var p1Col=colorNum0,p2Col=0xff6b4a;
-      var board,turn,ended,moves,pieceMeshes,dropping;
+      var board,turn,ended,moves,pieceMeshes,dropping,turnDeadline;
       function cellX(c){return(c-(COLS-1)/2)*.92}
       function cellY(r){return(ROWS-1-r)*.92+.46}
       function makePiece(colorNum){var m=new THREE.Mesh(new THREE.SphereGeometry(.38,20,16),new THREE.MeshStandardMaterial({color:colorNum,emissive:colorNum,emissiveIntensity:.2,metalness:.25,roughness:.5}));m.castShadow=true;scene.add(m);return m}
@@ -145,11 +145,11 @@ function dropConnect3d(id,cfg){
       function afterAiMove(){
         if(checkWin(board,2)){ended=!0;updateMsg('The house wins. Try again!',R.coral);burst3d(scene,particles,0,ROWS*.5,0,0xff6b4a,22);G.later(function(){G.over(moves*5,'The house connected '+WIN+'. Moves: '+moves)},900);return}
         if(boardFull()){ended=!0;updateMsg('Board full — draw.',R.dim);G.later(function(){G.over(50+moves*5,'Draw after '+moves+' moves')},900);return}
-        turn=1;updateMsg('Your turn',cfg.color);updateHud();refreshButtons();
+        turn=1;if(cfg.timed)turnDeadline=performance.now()+8000;updateMsg('Your turn',cfg.color);updateHud();refreshButtons();
       }
       var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';
       function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c}
-      function updateHud(){G.hud([['MOVES',moves],['TURN',turn===1?'You':'House']])}
+      function updateHud(){var h=[['MOVES',moves],['TURN',turn===1?'You':'House']];if(cfg.timed&&turn===1&&!ended)h.push(['TIME',Math.max(0,Math.ceil((turnDeadline-performance.now())/1000))+'s']);G.hud(h)}
       var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:6px;width:100%;max-width:360px;flex-wrap:wrap;justify-content:center;';
       var colBtns=[];
       for(var ci=0;ci<COLS;ci++){(function(c){var b=document.createElement('button');b.type='button';b.textContent=String(c+1);b.style.cssText='flex:1;min-width:28px;padding:10px 0;border-radius:8px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';b.addEventListener('click',function(){userMove(c)});btnRow.appendChild(b);colBtns.push(b)})(ci)}
@@ -167,6 +167,10 @@ function dropConnect3d(id,cfg){
       S3.wrapDiv.appendChild(msgDiv);S3.wrapDiv.appendChild(btnRow);
       function tick(dt){
         if(dropping){dropping.vy+=dt*9;dropping.mesh.position.y-=dropping.vy;if(dropping.mesh.position.y<=dropping.targetY){dropping.mesh.position.y=dropping.targetY;dropping=null}}
+        if(cfg.timed&&turn===1&&!ended&&!dropping){
+          updateHud();
+          if(performance.now()>=turnDeadline){var legal=legalCols();if(legal.length)userMove(legal[rnd(legal.length)])}
+        }
         stepParticles3d(scene,particles);
         S3.maxResizeCheck();
         S3.renderer.render(S3.scene,S3.camera);
@@ -174,7 +178,7 @@ function dropConnect3d(id,cfg){
       G.begin(function(){
         board=[];for(var r=0;r<ROWS;r++){var row=[];for(var c=0;c<COLS;c++)row.push(0);board.push(row)}
         pieceMeshes&&pieceMeshes.forEach(function(m){scene.remove(m);disposeThree(m)});
-        pieceMeshes=[];turn=1;ended=!1;moves=0;dropping=null;
+        pieceMeshes=[];turn=1;ended=!1;moves=0;dropping=null;if(cfg.timed)turnDeadline=performance.now()+8000;
         updateMsg('Your turn',cfg.color);updateHud();refreshButtons();
         G.frame(tick);
       });
@@ -184,8 +188,8 @@ function dropConnect3d(id,cfg){
 dropConnect3d('skylineDrop',{title:'Skyline Drop',tagline:'Drop pieces down a city-grid shaft and line up four before the house does.',color:R.blue,cols:7,rows:6,winLen:4});
 dropConnect3d('coralDrop',{title:'Coral Drop',tagline:'Stack coral pegs in a reef column grid — four in a row wins the tide.',color:R.teal,cols:7,rows:6,winLen:4});
 dropConnect3d('emberDrop',{title:'Ember Drop',tagline:'Drop glowing embers down a forge grid, chain four to win the round.',color:R.coral,cols:6,rows:5,winLen:4});
-dropConnect3d('orchardDrop',{title:'Orchard Drop',tagline:'Drop seeds down tall rows and line up five to win the harvest.',color:R.green,cols:8,rows:6,winLen:5});
-dropConnect3d('nebulaDrop',{title:'Nebula Drop',tagline:'Drop star-cores down a cosmic shaft — connect three on this compact grid.',color:R.violet,cols:5,rows:5,winLen:3});
+dropConnect3d('orchardDrop',{title:'Orchard Drop',tagline:'Drop seeds down tall rows and line up five to win the harvest — you only get 8 seconds a turn.',color:R.green,cols:8,rows:6,winLen:5,timed:!0});
+dropConnect3d('nebulaDrop',{title:'Nebula Drop',tagline:'Drop star-cores down a cosmic shaft — connect three on this compact grid, 8 seconds a turn.',color:R.violet,cols:5,rows:5,winLen:3,timed:!0});
 
 /* ================= flipGrid3d: Reversi/Othello-style disc flip, DOM grid + 3D disc visualization ================= */
 function flipGrid3d(id,cfg){
@@ -202,7 +206,7 @@ function flipGrid3d(id,cfg){
       addRails(scene,N*.86,N*.86,-.1,0x2a2155);
       glowOrbs(scene,[[-N*.43,.02,-N*.43],[N*.43,.02,-N*.43],[-N*.43,.02,N*.43],[N*.43,.02,N*.43]],p1Col);
       var particles=makeParticlePool();
-      var board,turn,ended,discMeshes;
+      var board,turn,ended,discMeshes,turnDeadline;
       function cellPos(r,c){return[(c-(N-1)/2)*.82,(r-(N-1)/2)*.82]}
       function makeDisc(r,c,who){var dc=who===1?p1Col:p2Col;var m=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,.12,20),new THREE.MeshStandardMaterial({color:dc,emissive:dc,emissiveIntensity:.2,metalness:.3,roughness:.4}));var xz=cellPos(r,c);m.position.set(xz[0],.06,xz[1]);m.castShadow=true;scene.add(m);discMeshes[r][c]=m;return m}
       var DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
@@ -228,7 +232,7 @@ function flipGrid3d(id,cfg){
       for(var r0=0;r0<N;r0++){cellBtns.push([]);for(var c0=0;c0<N;c0++){(function(r,c){var b=document.createElement('button');b.type='button';b.style.cssText='aspect-ratio:1;border-radius:5px;border:1px solid '+R.grid+';background:'+R.bg+';cursor:pointer;position:relative;';b.addEventListener('click',function(){userMove(r,c)});gridDiv.appendChild(b);cellBtns[r].push(b)})(r0,c0)}}
       var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';
       function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c}
-      function updateHud(){G.hud([['YOU',score(1)],['HOUSE',score(2)]])}
+      function updateHud(){var h=[['YOU',score(1)],['HOUSE',score(2)]];if(cfg.timed&&turn===1&&!ended)h.push(['TIME',Math.max(0,Math.ceil((turnDeadline-performance.now())/1000))+'s']);G.hud(h)}
       function refreshGrid(){
         var legal=turn===1?legalMoves(1):[];
         var legalSet={};legal.forEach(function(p){legalSet[p[0]+','+p[1]]=1});
@@ -253,7 +257,7 @@ function flipGrid3d(id,cfg){
       }
       function aiTurn(){
         var moves2=legalMoves(2);
-        if(!moves2.length){turn=1;if(!endIfNeeded()){updateMsg('Your turn (house had no move)',cfg.color);updateHud();refreshGrid()}return}
+        if(!moves2.length){turn=1;if(cfg.timed)turnDeadline=performance.now()+8000;if(!endIfNeeded()){updateMsg('Your turn (house had no move)',cfg.color);updateHud();refreshGrid()}return}
         var best=null,bestScore=-1;
         moves2.forEach(function(p){
           var fl=flipsFor(board,p[0],p[1],2).length;
@@ -268,7 +272,7 @@ function flipGrid3d(id,cfg){
         turn=1;
         var l1=legalMoves(1);
         if(!l1.length){turn=2;updateMsg('House moves again…',R.dim);updateHud();refreshGrid();G.later(aiTurn,500);return}
-        updateMsg('Your turn',cfg.color);updateHud();refreshGrid();
+        if(cfg.timed)turnDeadline=performance.now()+8000;updateMsg('Your turn',cfg.color);updateHud();refreshGrid();
       }
       function userMove(r,c){
         if(ended||turn!==1)return;
@@ -280,14 +284,19 @@ function flipGrid3d(id,cfg){
         G.later(aiTurn,500);
       }
       S3.wrapDiv.appendChild(msgDiv);S3.wrapDiv.appendChild(gridDiv);
-      function tick(dt){stepParticles3d(scene,particles);S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
+      function tick(dt){
+        if(cfg.timed&&turn===1&&!ended){
+          updateHud();
+          if(performance.now()>=turnDeadline){var legal=legalMoves(1);if(legal.length){var p=legal[rnd(legal.length)];userMove(p[0],p[1])}}
+        }
+        stepParticles3d(scene,particles);S3.maxResizeCheck();S3.renderer.render(S3.scene,S3.camera)}
       G.begin(function(){
         board=[];discMeshes=[];for(var r=0;r<N;r++){var row=[],mrow=[];for(var c=0;c<N;c++){row.push(0);mrow.push(null)}board.push(row);discMeshes.push(mrow)}
         var mid=N/2;
         board[mid-1][mid-1]=2;board[mid-1][mid]=1;board[mid][mid-1]=1;board[mid][mid]=2;
         var changed=[];for(var rr=mid-1;rr<=mid;rr++)for(var cc=mid-1;cc<=mid;cc++)changed.push([rr,cc]);
         syncMeshes(changed);
-        turn=1;ended=!1;updateMsg('Your turn',cfg.color);updateHud();refreshGrid();
+        turn=1;ended=!1;if(cfg.timed)turnDeadline=performance.now()+8000;updateMsg('Your turn',cfg.color);updateHud();refreshGrid();
         G.frame(tick);
       });
     });
@@ -295,12 +304,12 @@ function flipGrid3d(id,cfg){
 }
 flipGrid3d('galaxyFlip',{title:'Galaxy Flip',tagline:'Outflank the house across a starfield grid — control the most discs when no moves remain.',color:R.violet,size:6});
 flipGrid3d('emeraldFlip',{title:'Emerald Flip',tagline:'Claim gem tiles by trapping the house between your stones.',color:R.green,size:6});
-flipGrid3d('duneFlip',{title:'Dune Flip',tagline:'Flip dune tiles to your color and out-claim the house across the sands.',color:R.yellow,size:8});
-flipGrid3d('tidalFlip',{title:'Tidal Flip',tagline:'A bigger flipping board — out-maneuver the house across the whole tide pool.',color:R.blue,size:8});
+flipGrid3d('duneFlip',{title:'Dune Flip',tagline:'Flip dune tiles to your color and out-claim the house across the sands — 8 seconds a turn.',color:R.yellow,size:8,timed:!0});
+flipGrid3d('tidalFlip',{title:'Tidal Flip',tagline:'A bigger flipping board — out-maneuver the house across the whole tide pool, 8 seconds a turn.',color:R.blue,size:8,timed:!0});
 
 /* ================= nimStones3d: classic take-away stone-pile strategy game, optimal AI ================= */
 function nimStones3d(id,cfg){
-  def(id,cfg.title,cfg.color,cfg.tagline,'Click a stone to remove it and every stone above it in that pile · take the last stone to win',function(G){
+  def(id,cfg.title,cfg.color,cfg.tagline,cfg.misere?'Click a stone to remove it and every stone above it in that pile · avoid taking the last stone':'Click a stone to remove it and every stone above it in that pile · take the last stone to win',function(G){
     loadGate(G.el,function(){
       var piles0=cfg.piles.slice();
       var S3=setup3D(G,360,.7,0x0d1530);if(!S3)return;
@@ -351,8 +360,9 @@ function nimStones3d(id,cfg){
       function checkEndAfter(moverWasPlayer){
         if(totalStones()===0){
           ended=!0;
-          if(moverWasPlayer){updateMsg('You took the last stone — you win!',R.green);burst3d(scene,particles,0,1.5,0,0x3ddc97,26);G.later(function(){G.over(150,'You took the last stone!','You Win!')},800)}
-          else{updateMsg('House took the last stone. Try again!',R.coral);burst3d(scene,particles,0,1.5,0,0xff6b4a,18);G.later(function(){G.over(30,'The house took the last stone.')},800)}
+          var youWon=cfg.misere?!moverWasPlayer:moverWasPlayer;
+          if(youWon){updateMsg(cfg.misere?'The house was forced to take the last stone — you win!':'You took the last stone — you win!',R.green);burst3d(scene,particles,0,1.5,0,0x3ddc97,26);G.later(function(){G.over(150,cfg.misere?'The house was forced to take the last stone!':'You took the last stone!','You Win!')},800)}
+          else{updateMsg(cfg.misere?'You took the last stone. Try again!':'House took the last stone. Try again!',R.coral);burst3d(scene,particles,0,1.5,0,0xff6b4a,18);G.later(function(){G.over(30,cfg.misere?'You took the last stone.':'The house took the last stone.')},800)}
           return true;
         }
         return false;
@@ -393,8 +403,8 @@ function nimStones3d(id,cfg){
 }
 nimStones3d('templeStones',{title:'Temple Stones',tagline:'Classic stone-pile strategy — take the last stone from the temple vault to win.',color:R.yellow,piles:[1,3,5,7]});
 nimStones3d('glacierStones',{title:'Glacier Stones',tagline:'Chip away at ice-block piles — out-think the house to claim the final block.',color:R.teal,piles:[3,4,5]});
-nimStones3d('pirateStones',{title:'Pirate Stones',tagline:'Split the treasure piles with the house — grab the very last coin to win it all.',color:R.coral,piles:[2,4,6,8]});
-nimStones3d('meteorStones',{title:'Meteor Stones',tagline:'Clear meteor-rock piles turn by turn — the one who clears the last rock wins.',color:R.orange,piles:[1,2,3,4,5]});
+nimStones3d('pirateStones',{title:'Pirate Stones',tagline:'Misère rules — split the treasure piles with the house, but DON\'T get stuck grabbing the last coin.',color:R.coral,piles:[2,4,6,8],misere:!0});
+nimStones3d('meteorStones',{title:'Meteor Stones',tagline:'Misère rules — clear meteor-rock piles turn by turn, but don\'t let yourself clear the final one.',color:R.orange,piles:[1,2,3,4,5],misere:!0});
 
 }
 })();

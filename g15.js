@@ -166,8 +166,8 @@ function popTarget3d(id,cfg){
 }
 popTarget3d('moleThump',{title:'Mole Thump',tagline:'Thump the moles the instant they pop out of their burrows — three misses ends it.',color:R.green,rows:3,cols:3});
 popTarget3d('alienZap',{title:'Alien Zap',tagline:'Zap alien scouts the moment they peek out — speed ramps up the longer you last.',color:R.violet,rows:3,cols:4});
-popTarget3d('gemPop',{title:'Gem Pop',tagline:'Tap glowing gems the instant they surface from the vault floor.',color:R.magenta,rows:4,cols:3});
-popTarget3d('ghostTag',{title:'Ghost Tag',tagline:'Tag ghosts the second they phase into view — chain combos for bonus points.',color:R.teal,rows:3,cols:3});
+popSequence3d('gemPop',{title:'Gem Pop',tagline:'Tap glowing gems the instant they surface from the vault floor.',color:R.magenta,rows:4,cols:3});
+popSequence3d('ghostTag',{title:'Ghost Tag',tagline:'Tag ghosts the second they phase into view — chain combos for bonus points.',color:R.teal,rows:3,cols:3});
 
 /* ================= fallCatch3d: move a 3D catcher to grab falling good items, dodge bad ones ================= */
 function fallCatch3d(id,cfg){
@@ -246,8 +246,99 @@ function fallCatch3d(id,cfg){
 }
 fallCatch3d('starCatch',{title:'Star Catch',tagline:'Slide the catcher to grab falling stars and dodge the rogue meteors.',color:R.yellow});
 fallCatch3d('boltCatch',{title:'Bolt Catch',tagline:'Catch the charged bolts streaming down the lanes — avoid the dead cells.',color:R.blue});
-fallCatch3d('bubbleCatch',{title:'Bubble Catch',tagline:'Pop up to catch rising-value bubbles, steer clear of the popped ones.',color:R.teal});
-fallCatch3d('emberCatch',{title:'Ember Catch',tagline:'Catch the glowing embers falling from the forge, dodge the cooled cinders.',color:R.orange});
+laneTap3d('bubbleCatch',{title:'Bubble Catch',tagline:'Pop up to catch rising-value bubbles, steer clear of the popped ones.',color:R.teal});
+laneTap3d('emberCatch',{title:'Ember Catch',tagline:'Catch the glowing embers falling from the forge, dodge the cooled cinders.',color:R.orange});
+
+/* ================= popSequence3d: Simon-says memory sequence on the same hole grid ================= */
+function popSequence3d(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Watch the holes light up in order, then tap them back in the same order · three mistakes ends it',function(G){
+    var ROWS=cfg.rows,COLS=cfg.cols;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var gridDiv=document.createElement('div');gridDiv.style.cssText='display:grid;grid-template-columns:repeat('+COLS+',1fr);gap:8px;width:100%;';wrap.appendChild(gridDiv);
+    var cellBtns=[];
+    for(var i=0;i<ROWS*COLS;i++){(function(idx){var b=document.createElement('button');b.type='button';b.style.cssText='aspect-ratio:1;border-radius:50%;border:2px solid '+R.grid+';background:'+R.bg+';cursor:pointer;';b.addEventListener('click',function(){tapHole(idx)});gridDiv.appendChild(b);cellBtns.push(b)})(i)}
+    var seq,playerIdx,lives,score,showingSeq,ended;
+    function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c}
+    function updateHud(){G.hud([['SCORE',padnum(score)],['LEVEL',seq?seq.length:0],['LIVES',lives]])}
+    function flash(idx,ms){var b=cellBtns[idx];b.style.background=cfg.color;G.later(function(){if(!ended)b.style.background=R.bg},ms)}
+    function replaySeq(){
+      showingSeq=!0;updateMsg('Watch closely…',cfg.color);
+      seq.forEach(function(idx,i){G.later(function(){flash(idx,380)},i*520)});
+      G.later(function(){showingSeq=!1;updateMsg('Your turn — repeat it!',cfg.color)},seq.length*520);
+    }
+    function newRound(){
+      seq=(seq||[]).concat([rnd(ROWS*COLS)]);playerIdx=0;
+      replaySeq();
+    }
+    function tapHole(idx){
+      if(ended||showingSeq)return;
+      if(idx===seq[playerIdx]){
+        flash(idx,220);playerIdx++;
+        if(playerIdx>=seq.length){score+=10*seq.length;updateHud();G.later(newRound,700)}
+      }else{
+        lives--;playerIdx=0;updateHud();
+        var b=cellBtns[idx];b.style.background='#ff6b4a';G.later(function(){if(!ended)b.style.background=R.bg},250);
+        if(lives<=0){ended=!0;updateMsg('Out of lives!',R.coral);G.later(function(){G.over(score,'Reached a sequence of '+seq.length+' · Score: '+score)},700)}
+        else{updateMsg('Wrong hole — try this sequence again',R.coral);G.later(replaySeq,700)}
+      }
+    }
+    G.begin(function(){score=0;lives=3;seq=[];ended=!1;showingSeq=!1;updateHud();G.later(newRound,400)})
+  });
+}
+
+/* ================= laneTap3d: Guitar-Hero style multi-lane rhythm tapping ================= */
+function laneTap3d(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Press 1-4 (or tap a lane) the instant a note crosses the line · misses cost a life',function(G){
+    var LANES=4,KEYS=['1','2','3','4'];
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var laneRow=document.createElement('div');laneRow.style.cssText='display:flex;gap:8px;width:100%;height:220px;';wrap.appendChild(laneRow);
+    var laneEls=[],noteEls=[],hitLineEls=[];
+    for(var l=0;l<LANES;l++){
+      var col=document.createElement('div');col.style.cssText='position:relative;flex:1;background:'+R.grid+';border-radius:8px;overflow:hidden;';
+      var hitLine=document.createElement('div');hitLine.style.cssText='position:absolute;left:0;right:0;bottom:36px;height:4px;background:'+R.dim+';';col.appendChild(hitLine);
+      var note=document.createElement('div');note.style.cssText='position:absolute;left:4px;right:4px;height:22px;border-radius:5px;background:'+cfg.color+';top:-30px;display:none;';col.appendChild(note);
+      laneRow.appendChild(col);laneEls.push(col);noteEls.push(note);hitLineEls.push(hitLine);
+    }
+    var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:8px;width:100%;';
+    KEYS.forEach(function(k,l){var b=document.createElement('button');b.type='button';b.textContent=k;b.style.cssText='flex:1;padding:12px;border-radius:8px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';b.addEventListener('click',function(){hitLane(l)});btnRow.appendChild(b)});
+    wrap.appendChild(btnRow);
+    var notes,score,lives,combo,ended,spawnAcc,spawnEvery,fallDur;
+    function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c}
+    function updateHud(){G.hud([['SCORE',padnum(score)],['COMBO',combo],['LIVES',lives]])}
+    function spawnNote(){
+      var l=rnd(LANES);
+      if(notes[l])return;
+      notes[l]={t:0};
+    }
+    function missLane(l){lives--;combo=0;notes[l]=null;noteEls[l].style.display='none';updateHud();if(lives<=0)endGame()}
+    function hitLane(l){
+      if(ended)return;
+      var n=notes[l];
+      if(!n){missLane(l);return}
+      if(n.t>=.72&&n.t<=1.28){score+=10+combo*2;combo++;notes[l]=null;noteEls[l].style.display='none';updateHud()}
+      else{missLane(l)}
+    }
+    function endGame(){ended=!0;updateMsg('Out of lives!',R.coral);G.later(function(){G.over(score,'Score: '+score+' · Best combo x'+combo)},700)}
+    G.press=function(k){var idx=KEYS.indexOf(k);if(idx>=0)hitLane(idx)};
+    G.pad(KEYS.map(function(k,i){return[k,k]}));
+    function tick(dt){
+      spawnAcc+=dt;
+      if(spawnAcc>=spawnEvery){spawnAcc=0;spawnNote();spawnEvery=Math.max(.55,spawnEvery*.98)}
+      for(var l=0;l<LANES;l++){
+        var n=notes[l];
+        if(!n)continue;
+        n.t+=dt/fallDur;
+        var pxPos=n.t*184;
+        noteEls[l].style.display='block';noteEls[l].style.top=pxPos+'px';
+        if(n.t>1.5)missLane(l);
+      }
+    }
+    G.begin(function(){score=0;lives=3;combo=0;ended=!1;notes=[null,null,null,null];spawnAcc=0;spawnEvery=1.1;fallDur=1.3;noteEls.forEach(function(e){e.style.display='none'});updateMsg('Go!',cfg.color);updateHud();G.frame(tick)})
+  });
+}
+
 
 }
 })();

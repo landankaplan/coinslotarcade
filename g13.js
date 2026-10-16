@@ -145,11 +145,11 @@ function cardDuel3d(id,cfg){
 cardDuel3d('starDuel',{title:'Star Duel',tagline:'Guess higher or lower under the stars, bank your streak before it burns out.',color:R.violet,suits:['★','✦','✪','✶']});
 cardDuel3d('gemDuel',{title:'Gem Duel',tagline:'Call higher or lower on the gem table, cash out before you bust.',color:R.magenta,suits:['◆','●','▲','■']});
 cardDuel3d('casinoDuel',{title:'Casino Duel',tagline:'Classic high-card nerve — guess right, build the pot, know when to walk.',color:R.yellow,suits:['♠','♥','♦','♣']});
-cardDuel3d('arrowDuel',{title:'Arrow Duel',tagline:'Read the next arrow — higher or lower — and bank before you miss.',color:R.teal,suits:['▲','▼','◀','▶']});
-cardDuel3d('moonDuel',{title:'Moon Duel',tagline:'Call the night sky right three times running, then bank the glow.',color:R.coral,suits:['☀','☾','☆','●']});
-cardDuel3d('crownDuel',{title:'Crown Duel',tagline:'Royal high-card wagers — guess the rank, protect your streak.',color:R.green,suits:['♔','♕','♖','♗']});
-cardDuel3d('waveDuel',{title:'Wave Duel',tagline:'Ride the tide of higher-or-lower — bank your pot before it crashes.',color:R.blue,suits:['≈','∿','○','◇']});
-cardDuel3d('boltDuel',{title:'Bolt Duel',tagline:'Call the charge right, chain a streak, bank before the storm turns.',color:R.orange,suits:['⚡','✹','✺','✴']});
+cardPushLuck('arrowDuel',{title:'Arrow Duel',tagline:'Read the next arrow — higher or lower — and bank before you miss.',color:R.teal,suits:['▲','▼','◀','▶']});
+cardPushLuck('moonDuel',{title:'Moon Duel',tagline:'Call the night sky right three times running, then bank the glow.',color:R.coral,suits:['☀','☾','☆','●']});
+cardPushLuck('crownDuel',{title:'Crown Duel',tagline:'Royal high-card wagers — guess the rank, protect your streak.',color:R.green,suits:['♔','♕','♖','♗']});
+cardWager('waveDuel',{title:'Wave Duel',tagline:'Ride the tide of higher-or-lower — bank your pot before it crashes.',color:R.blue,suits:['≈','∿','○','◇']});
+cardWager('boltDuel',{title:'Bolt Duel',tagline:'Call the charge right, chain a streak, bank before the storm turns.',color:R.orange,suits:['⚡','✹','✺','✴']});
 
 /* ================= wordReveal3d: hangman-style word guessing with flipping 3D letter tiles ================= */
 function wordReveal3d(id,cfg){
@@ -200,10 +200,96 @@ function wordReveal3d(id,cfg){
 wordReveal3d('animalWords',{title:'Animal Words',tagline:'Guess the hidden animal one letter at a time before you run out of tries.',color:R.green,words:['tiger','zebra','falcon','otter','panda','walrus','cheetah','giraffe','dolphin','penguin','koala','beaver','camel','rabbit','hedgehog','flamingo','octopus','sparrow','leopard','gorilla','raccoon','peacock','antelope','wombat']});
 wordReveal3d('foodWords',{title:'Food Words',tagline:'Reveal the hidden dish or ingredient before the guesses run dry.',color:R.coral,words:['noodle','pretzel','avocado','burrito','waffle','biscuit','sausage','spinach','mustard','paprika','oatmeal','lasagna','pancake','walnut','cabbage','risotto','omelet','pumpkin','coconut','mango','ginger','broccoli','cinnamon','yogurt']});
 wordReveal3d('spaceWords',{title:'Space Words',tagline:'Guess the hidden space term before your tries burn out.',color:R.violet,words:['comet','nebula','asteroid','galaxy','orbit','meteor','quasar','pulsar','satellite','telescope','gravity','eclipse','rocket','cosmos','starlight','blackhole','horizon','capsule','booster','module','crater','lunar','solar','vacuum']});
-wordReveal3d('sportsWords',{title:'Sports Words',tagline:'Guess the hidden sports term before you run out of tries.',color:R.blue,words:['referee','stadium','offside','dribble','sprint','hurdle','javelin','wrestle','paddle','racket','goalie','fairway','rebound','timeout','penalty','scrimmage','touchdown','backstroke','marathon','forehand','dugout','bullseye','relay','podium']});
-wordReveal3d('musicWords',{title:'Music Words',tagline:'Guess the hidden music term before the band runs out of patience.',color:R.magenta,words:['melody','rhythm','chorus','ballad','trumpet','cymbal','acoustic','harmony','tempo','falsetto','ukulele','clarinet','orchestra','vocalist','baritone','crescendo','interlude','harmonica','vibrato','sonata','timbre','encore','octave','ensemble']});
-wordReveal3d('natureWords',{title:'Nature Words',tagline:'Guess the hidden nature word before your guesses run dry.',color:R.teal,words:['canyon','glacier','wetland','volcano','meadow','tundra','plateau','savanna','lagoon','boulder','cascade','thicket','orchard','prairie','monsoon','horizon','driftwood','bedrock','wildfire','estuary','foliage','ravine','blossom','summit']});
-wordReveal3d('techWords',{title:'Tech Words',tagline:'Guess the hidden tech term before you run out of attempts.',color:R.yellow,words:['firewall','browser','keyboard','monitor','gigabyte','terminal','bluetooth','firmware','database','algorithm','encrypt','joystick','hologram','prototype','router','pixel','upload','malware','compiler','wireless','backup','circuit','software','gadget']});
+wordScramble('sportsWords',{title:'Sports Words',tagline:'Guess the hidden sports term before you run out of tries.',color:R.blue,words:['referee','stadium','offside','dribble','sprint','hurdle','javelin','wrestle','paddle','racket','goalie','fairway','rebound','timeout','penalty','scrimmage','touchdown','backstroke','marathon','forehand','dugout','bullseye','relay','podium']});
+wordScramble('musicWords',{title:'Music Words',tagline:'Guess the hidden music term before the band runs out of patience.',color:R.magenta,words:['melody','rhythm','chorus','ballad','trumpet','cymbal','acoustic','harmony','tempo','falsetto','ukulele','clarinet','orchestra','vocalist','baritone','crescendo','interlude','harmonica','vibrato','sonata','timbre','encore','octave','ensemble']});
+wordCrossfire('natureWords',{title:'Nature Words',tagline:'Guess the hidden nature word before your guesses run dry.',color:R.teal,words:['canyon','glacier','wetland','volcano','meadow','tundra','plateau','savanna','lagoon','boulder','cascade','thicket','orchard','prairie','monsoon','horizon','driftwood','bedrock','wildfire','estuary','foliage','ravine','blossom','summit']});
+wordCrossfire('techWords',{title:'Tech Words',tagline:'Guess the hidden tech term before you run out of attempts.',color:R.yellow,words:['firewall','browser','keyboard','monitor','gigabyte','terminal','bluetooth','firmware','database','algorithm','encrypt','joystick','hologram','prototype','router','pixel','upload','malware','compiler','wireless','backup','circuit','software','gadget']});
+
+/* ================= cardPushLuck: draw cards, bank your running total before you bust ================= */
+function cardPushLuck(id,cfg){
+  var BUST=31;
+  def(id,cfg.title,cfg.color,cfg.tagline,'Draw cards and bank before you bust past '+BUST+' · D to draw · B to bank · 3 busts ends it',function(G){
+    var deck,total,lives,score,drawn,cards,message,msgColor;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:400px;margin:0 auto;';G.el.appendChild(wrap);
+    var cardsRow=document.createElement('div');cardsRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;justify-content:center;min-height:70px;width:100%;';wrap.appendChild(cardsRow);
+    var totalDiv=document.createElement('div');totalDiv.style.cssText='font-weight:800;font-size:1.3rem;text-align:center;';wrap.appendChild(totalDiv);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:10px;width:100%;';
+    var drawBtn=document.createElement('button');drawBtn.type='button';drawBtn.textContent='DRAW';drawBtn.style.cssText='flex:1;padding:14px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';
+    var bankBtn=document.createElement('button');bankBtn.type='button';bankBtn.textContent='BANK';bankBtn.style.cssText='flex:1;padding:14px;border-radius:10px;border:none;background:#3ddc97;color:#171233;font-weight:800;cursor:pointer;';
+    btnRow.appendChild(drawBtn);btnRow.appendChild(bankBtn);wrap.appendChild(btnRow);
+    function renderCards(){cardsRow.innerHTML=cards.map(function(c){var red=c.s===1||c.s===2;return '<div style="width:34px;height:48px;border-radius:6px;background:#f4f1ff;color:'+(red?'#d8434a':'#171233')+';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;">'+E[c.r]+'</div>'}).join('')}
+    function updateHud(){totalDiv.textContent='TOTAL '+total;msgDiv.textContent=message;msgDiv.style.color=msgColor;bankBtn.disabled=total<=0;G.hud([['SCORE',padnum(score)],['LIVES','♥'.repeat(Math.max(0,lives))]])}
+    function doDraw(){if(lives<=0)return;if(!deck.length)deck=T();var c=deck.pop();cards.push(c);drawn++;total+=c.r;renderCards();if(total>BUST){lives--;message='Bust at '+total+'! Run lost.';msgColor='#ff6b4a';total=0;cards=[];drawn=0;renderCards();if(lives<=0){G.later(function(){G.over(score,'Final score: '+score)},500)}}else{message='Drew '+E[c.r]+'. Keep going or bank.';msgColor='#E9FBF9'}updateHud()}
+    function doBank(){if(total<=0)return;score+=total;message='Banked '+total+' points!';msgColor=cfg.color;total=0;cards=[];drawn=0;renderCards();updateHud()}
+    drawBtn.addEventListener('click',doDraw);bankBtn.addEventListener('click',doBank);
+    G.press=function(k){if('d'===k)doDraw();else if('b'===k)doBank()};
+    G.pad([['Draw','d'],['Bank','b']]);
+    G.begin(function(){deck=T();total=0;lives=3;score=0;drawn=0;cards=[];message='Draw a card to start.';msgColor='#E9FBF9';renderCards();updateHud()})
+  });
+}
+
+/* ================= cardWager: pick a wager tier, reveal vs the dealer, 15 rounds ================= */
+function cardWager(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Pick a wager — Low/Med/High — before the reveal · higher card wins the wager, lower loses it · 15 rounds',function(G){
+    var deck,score,round,message,msgColor;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:400px;margin:0 auto;';G.el.appendChild(wrap);
+    var cardsRow=document.createElement('div');cardsRow.style.cssText='display:flex;gap:16px;justify-content:center;min-height:70px;width:100%;align-items:center;';wrap.appendChild(cardsRow);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var btnRow=document.createElement('div');btnRow.style.cssText='display:flex;gap:8px;width:100%;';
+    var tiers=[{label:'LOW',amt:10},{label:'MED',amt:25},{label:'HIGH',amt:50}];
+    tiers.forEach(function(t){var b=document.createElement('button');b.type='button';b.textContent=t.label+' ('+t.amt+')';b.style.cssText='flex:1;padding:12px 6px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;font-size:.8rem;';b.addEventListener('click',function(){resolveRound(t.amt)});btnRow.appendChild(b)});
+    wrap.appendChild(btnRow);
+    function cardFace(c,label){var red=c.s===1||c.s===2;return '<div style="text-align:center;"><div style="width:44px;height:62px;border-radius:7px;background:#f4f1ff;color:'+(red?'#d8434a':'#171233')+';display:flex;align-items:center;justify-content:center;font-weight:800;">'+E[c.r]+'</div><div style="font-size:.65rem;opacity:.6;margin-top:3px;">'+label+'</div></div>'}
+    function renderCards(you,opp){cardsRow.innerHTML=(you?cardFace(you,'YOU'):'')+(opp?cardFace(opp,'DEALER'):'')}
+    function updateHud(){G.hud([['SCORE',padnum(score)],['ROUND',round+'/15']])}
+    function resolveRound(amt){if(round>=15)return;if(!deck||deck.length<2)deck=T();var you=deck.pop(),opp=deck.pop();renderCards(you,opp);round++;if(you.r===opp.r){message='Push — tie, wager returned.';msgColor='#9aa'}else if(you.r>opp.r){score+=amt;message='You win! +'+amt;msgColor='#3ddc97'}else{score=Math.max(0,score-amt);message='Dealer wins. -'+amt;msgColor='#ff6b4a'}updateHud();if(round>=15){G.later(function(){G.over(score,'15 rounds complete. Final score: '+score)},900)}}
+    G.press=function(k){if('1'===k)resolveRound(10);else if('2'===k)resolveRound(25);else if('3'===k)resolveRound(50)};
+    G.pad([['Low','1'],['Med','2'],['High','3']]);
+    G.begin(function(){deck=T();score=0;round=0;message='Pick a wager to reveal.';msgColor='#E9FBF9';renderCards(null,null);updateHud()})
+  });
+}
+
+/* ================= wordScramble: click shuffled letters in order to spell the word ================= */
+function wordScramble(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Click the shuffled letters in order to spell the word · 5 mistakes ends the round',function(G){
+    var word,order,nextIdx,mistakes,score,solved;
+    var MAXW=5;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:420px;margin:0 auto;';G.el.appendChild(wrap);
+    var answerDiv=document.createElement('div');answerDiv.style.cssText='font-weight:800;font-size:1.3rem;letter-spacing:.15em;text-align:center;min-height:1.6em;';wrap.appendChild(answerDiv);
+    var tilesDiv=document.createElement('div');tilesDiv.style.cssText='display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:100%;';wrap.appendChild(tilesDiv);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    function updateHud(){G.hud([['SCORE',padnum(score)],['SOLVED',solved],['MISTAKES',mistakes+'/'+MAXW]])}
+    function renderAnswer(){var s='';for(var i=0;i<word.length;i++)s+=i<nextIdx?word.charAt(i).toUpperCase():'_';answerDiv.textContent=s.split('').join(' ')}
+    function renderTiles(){tilesDiv.innerHTML='';order.forEach(function(item){var b=document.createElement('button');b.type='button';b.textContent=item.ch.toUpperCase();b.style.cssText='width:38px;height:40px;border-radius:7px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';b.addEventListener('click',function(){pickLetter(item,b)});tilesDiv.appendChild(b)})}
+    function pickLetter(item,btn){if(item.used||nextIdx>=word.length)return;if(item.ch===word.charAt(nextIdx)){item.used=!0;btn.disabled=!0;btn.style.opacity='.3';nextIdx++;renderAnswer();if(nextIdx>=word.length){solved++;score+=100;msgDiv.textContent='Solved! +100';msgDiv.style.color='#3ddc97';updateHud();G.later(newWord,900);return}}else{mistakes++;msgDiv.textContent='Wrong spot — '+(MAXW-mistakes)+' left';msgDiv.style.color='#ff6b4a';btn.style.background='#ff6b4a';G.later(function(){btn.style.background=cfg.color},250);if(mistakes>=MAXW){msgDiv.textContent='Out of tries. Word was '+word.toUpperCase();G.later(function(){G.over(score,'Words solved: '+solved+' · Score: '+score)},1200)}}updateHud()}
+    function newWord(){word=pick(cfg.words).toLowerCase();order=shuf(word.split('').map(function(ch,i){return{ch:ch,i:i,used:!1}}));nextIdx=0;renderAnswer();renderTiles()}
+    G.begin(function(){score=0;solved=0;mistakes=0;msgDiv.textContent='Spell the word!';msgDiv.style.color='#E9FBF9';newWord();updateHud()})
+  });
+}
+
+/* ================= wordCrossfire: type the whole word before decaying hints give it away ================= */
+function wordCrossfire(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Type the whole word before the hints run out · Enter to submit · 10 words',function(G){
+    var word,revealed,score,solved,attempts,hintTimer;
+    var MAXATTEMPTS=10;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:400px;margin:0 auto;';G.el.appendChild(wrap);
+    var hintDiv=document.createElement('div');hintDiv.style.cssText='font-weight:800;font-size:1.3rem;letter-spacing:.15em;text-align:center;min-height:1.6em;';wrap.appendChild(hintDiv);
+    var inputRow=document.createElement('div');inputRow.style.cssText='display:flex;gap:8px;width:100%;';
+    var input=document.createElement('input');input.type='text';input.autocomplete='off';input.spellcheck=!1;input.style.cssText='flex:1;padding:12px;border-radius:10px;border:none;font-size:1rem;';
+    var submitBtn=document.createElement('button');submitBtn.type='button';submitBtn.textContent='GUESS';submitBtn.style.cssText='padding:12px 18px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';
+    inputRow.appendChild(input);inputRow.appendChild(submitBtn);wrap.appendChild(inputRow);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    function updateHud(){G.hud([['SCORE',padnum(score)],['SOLVED',solved],['WORD',attempts+'/'+MAXATTEMPTS]])}
+    function renderHint(){var s='';for(var i=0;i<word.length;i++)s+=i<revealed?word.charAt(i).toUpperCase():'_';hintDiv.textContent=s.split('').join(' ')}
+    function newWord(){word=pick(cfg.words).toLowerCase();revealed=1;attempts++;input.value='';renderHint();msgDiv.textContent='Guess before the hints run out!';msgDiv.style.color='#E9FBF9';hintTimer=G.every(function(){if(revealed<word.length){revealed++;renderHint()}},2800);updateHud()}
+    function submitGuess(){var val=(input.value||'').toLowerCase().trim();if(!val)return;if(val===word){var bonus=Math.max(10,100-10*(revealed-1));score+=bonus;solved++;msgDiv.textContent='Correct! +'+bonus;msgDiv.style.color='#3ddc97';clearInterval(hintTimer);if(attempts>=MAXATTEMPTS){G.later(function(){G.over(score,'Words solved: '+solved+' · Score: '+score)},900);return}G.later(newWord,900)}else{msgDiv.textContent='Not quite — try again';msgDiv.style.color='#ff6b4a';input.value=''}}
+    submitBtn.addEventListener('click',submitGuess);
+    input.addEventListener('keydown',function(e){if('Enter'===e.key){e.preventDefault();submitGuess()}});
+    G.begin(function(){score=0;solved=0;attempts=0;newWord()})
+  });
+}
+
 
 }
 })();
