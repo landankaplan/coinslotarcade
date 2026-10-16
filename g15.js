@@ -173,7 +173,7 @@ popSequence3d('ghostTag',{title:'Ghost Tag',tagline:'Tag ghosts the second they 
 function fallCatch3d(id,cfg){
   def(id,cfg.title,cfg.color,cfg.tagline,'Left / Right or A / D to move the catcher · grab good drops, dodge the bad ones',function(G){
     loadGate(G.el,function(){
-      var LANES=5;
+      var LANES=cfg.lanes||5;
       var S3=setup3D(G,360,.78,0x0d1530);if(!S3)return;
       var scene=S3.scene,camera=S3.camera;
       camera.position.set(0,3.2,5.6);camera.lookAt(0,1,0);
@@ -245,9 +245,9 @@ function fallCatch3d(id,cfg){
   });
 }
 fallCatch3d('starCatch',{title:'Star Catch',tagline:'Slide the catcher to grab falling stars and dodge the rogue meteors.',color:R.yellow});
-fallCatch3d('boltCatch',{title:'Bolt Catch',tagline:'Catch the charged bolts streaming down the lanes — avoid the dead cells.',color:R.blue});
+fallCatch3d('boltCatch',{title:'Bolt Catch',tagline:'Catch the charged bolts streaming down a tighter four-lane grid — avoid the dead cells.',color:R.blue,lanes:4});
 laneTap3d('bubbleCatch',{title:'Bubble Catch',tagline:'Pop up to catch rising-value bubbles, steer clear of the popped ones.',color:R.teal});
-laneTap3d('emberCatch',{title:'Ember Catch',tagline:'Catch the glowing embers falling from the forge, dodge the cooled cinders.',color:R.orange});
+laneTap3d('emberCatch',{title:'Ember Catch',tagline:'The forge runs hot — embers fall faster and closer together, dodge the cooled cinders.',color:R.orange,fallDur:1.0,spawnEvery:.9});
 
 /* ================= popSequence3d: Simon-says memory sequence on the same hole grid ================= */
 function popSequence3d(id,cfg){
@@ -335,7 +335,7 @@ function laneTap3d(id,cfg){
         if(n.t>1.5)missLane(l);
       }
     }
-    G.begin(function(){score=0;lives=3;combo=0;ended=!1;notes=[null,null,null,null];spawnAcc=0;spawnEvery=1.1;fallDur=1.3;noteEls.forEach(function(e){e.style.display='none'});updateMsg('Go!',cfg.color);updateHud();G.frame(tick)})
+    G.begin(function(){score=0;lives=3;combo=0;ended=!1;notes=[null,null,null,null];spawnAcc=0;spawnEvery=cfg.spawnEvery||1.1;fallDur=cfg.fallDur||1.3;noteEls.forEach(function(e){e.style.display='none'});updateMsg('Go!',cfg.color);updateHud();G.frame(tick)})
   });
 }
 

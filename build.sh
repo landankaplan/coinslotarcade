@@ -41,7 +41,7 @@ echo "Bundle OK: $EXT_SUM"
 # is fully closed by the end of g12.js. Adds cardDuel3d x8 + wordReveal3d x7, bringing
 # Cards & Words from 5 to 20 games. Checksum + syntax gated like the base bundle. ---
 G13_SUM=$(md5sum g13.js | awk '{print $1}')
-if [ "$G13_SUM" != "549a5970a5d6a5bfe63ac24f34479199" ]; then
+if [ "$G13_SUM" != "d3a66e36836580fe6fdbcc545fe2dfd6" ]; then
   echo "G13 BUNDLE MISMATCH: got $G13_SUM"
   exit 1
 fi
@@ -54,7 +54,7 @@ echo "Cards & Words extras OK: $G13_SUM"
 # --- Board & Strategy v2 extras (g14.js): same chain/wrap pattern as g13.js. Adds
 # dropConnect3d x5 + flipGrid3d x4 + nimStones3d x4, bringing Board & Strategy from 7 to 20. ---
 G14_SUM=$(md5sum g14.js | awk '{print $1}')
-if [ "$G14_SUM" != "86a583aaf3c8d66dd712de39507d9bbe" ]; then
+if [ "$G14_SUM" != "7d9326714f8cd73f9e82e7ee187ee58f" ]; then
   echo "G14 BUNDLE MISMATCH: got $G14_SUM"
   exit 1
 fi
@@ -67,7 +67,7 @@ echo "Board & Strategy extras OK: $G14_SUM"
 # --- Reflex v2 extras (g15.js): same chain/wrap pattern. Adds popTarget3d x4 + fallCatch3d x4,
 # bringing Reflex from 12 to 20. ---
 G15_SUM=$(md5sum g15.js | awk '{print $1}')
-if [ "$G15_SUM" != "a0b409dab89d15326b61e31bbcc4cf29" ]; then
+if [ "$G15_SUM" != "355eeef78e813c2da2c69c65da775318" ]; then
   echo "G15 BUNDLE MISMATCH: got $G15_SUM"
   exit 1
 fi

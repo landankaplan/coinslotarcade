@@ -138,18 +138,18 @@ function cardDuel3d(id,cfg){
         stepParticles3d(scene3d,particles);
         var w2=canvasWrap.clientWidth;if(w2&&Math.abs(w2-G.w)>4){var sz2=resize();G.w=sz2[0];G.h=sz2[1]}
         renderer3d.render(scene3d,camera3d)}
-      G.begin(function(){deck=T();current=deck.pop();lives=3;streak=0;score=0;pot=0;message='Higher or lower?';msgColor='#E9FBF9';lockT=0;flipping=!1;flipT=0;drawCard(current);cardMesh.rotation.y=0;updateHud();G.frame(tick)})
+      G.begin(function(){deck=T();current=deck.pop();lives=cfg.lives||3;streak=0;score=0;pot=0;message='Higher or lower?';msgColor='#E9FBF9';lockT=0;flipping=!1;flipT=0;drawCard(current);cardMesh.rotation.y=0;updateHud();G.frame(tick)})
     })
   })
 }
 cardDuel3d('starDuel',{title:'Star Duel',tagline:'Guess higher or lower under the stars, bank your streak before it burns out.',color:R.violet,suits:['★','✦','✪','✶']});
-cardDuel3d('gemDuel',{title:'Gem Duel',tagline:'Call higher or lower on the gem table, cash out before you bust.',color:R.magenta,suits:['◆','●','▲','■']});
-cardDuel3d('casinoDuel',{title:'Casino Duel',tagline:'Classic high-card nerve — guess right, build the pot, know when to walk.',color:R.yellow,suits:['♠','♥','♦','♣']});
+cardDuel3d('gemDuel',{title:'Gem Duel',tagline:'Call higher or lower on the gem table — four lives to cash out before you bust.',color:R.magenta,suits:['◆','●','▲','■'],lives:4});
+cardDuel3d('casinoDuel',{title:'Casino Duel',tagline:'Classic high-card nerve — just two lives, guess right, build the pot, know when to walk.',color:R.yellow,suits:['♠','♥','♦','♣'],lives:2});
 cardPushLuck('arrowDuel',{title:'Arrow Duel',tagline:'Read the next arrow — higher or lower — and bank before you miss.',color:R.teal,suits:['▲','▼','◀','▶']});
-cardPushLuck('moonDuel',{title:'Moon Duel',tagline:'Call the night sky right three times running, then bank the glow.',color:R.coral,suits:['☀','☾','☆','●']});
-cardPushLuck('crownDuel',{title:'Crown Duel',tagline:'Royal high-card wagers — guess the rank, protect your streak.',color:R.green,suits:['♔','♕','♖','♗']});
+cardPushLuck('moonDuel',{title:'Moon Duel',tagline:'The night sky busts sooner — chase a lower ceiling and bank before you cross it.',color:R.coral,suits:['☀','☾','☆','●'],bust:24});
+cardPushLuck('crownDuel',{title:'Crown Duel',tagline:'Royal stakes — only two busts allowed, so bank early and often.',color:R.green,suits:['♔','♕','♖','♗'],lives:2});
 cardWager('waveDuel',{title:'Wave Duel',tagline:'Ride the tide of higher-or-lower — bank your pot before it crashes.',color:R.blue,suits:['≈','∿','○','◇']});
-cardWager('boltDuel',{title:'Bolt Duel',tagline:'Call the charge right, chain a streak, bank before the storm turns.',color:R.orange,suits:['⚡','✹','✺','✴']});
+cardWager('boltDuel',{title:'Bolt Duel',tagline:'The storm is short — just 10 fast rounds to chain a streak before it turns.',color:R.orange,suits:['⚡','✹','✺','✴'],rounds:10});
 
 /* ================= wordReveal3d: hangman-style word guessing with flipping 3D letter tiles ================= */
 function wordReveal3d(id,cfg){
@@ -207,8 +207,8 @@ wordCrossfire('techWords',{title:'Tech Words',tagline:'Guess the hidden tech ter
 
 /* ================= cardPushLuck: draw cards, bank your running total before you bust ================= */
 function cardPushLuck(id,cfg){
-  var BUST=31;
-  def(id,cfg.title,cfg.color,cfg.tagline,'Draw cards and bank before you bust past '+BUST+' · D to draw · B to bank · 3 busts ends it',function(G){
+  var BUST=cfg.bust||31;
+  def(id,cfg.title,cfg.color,cfg.tagline,'Draw cards and bank before you bust past '+BUST+' · D to draw · B to bank · '+(cfg.lives||3)+' busts ends it',function(G){
     var deck,total,lives,score,drawn,cards,message,msgColor;
     var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:400px;margin:0 auto;';G.el.appendChild(wrap);
     var cardsRow=document.createElement('div');cardsRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;justify-content:center;min-height:70px;width:100%;';wrap.appendChild(cardsRow);
@@ -225,14 +225,14 @@ function cardPushLuck(id,cfg){
     drawBtn.addEventListener('click',doDraw);bankBtn.addEventListener('click',doBank);
     G.press=function(k){if('d'===k)doDraw();else if('b'===k)doBank()};
     G.pad([['Draw','d'],['Bank','b']]);
-    G.begin(function(){deck=T();total=0;lives=3;score=0;drawn=0;cards=[];message='Draw a card to start.';msgColor='#E9FBF9';renderCards();updateHud()})
+    G.begin(function(){deck=T();total=0;lives=cfg.lives||3;score=0;drawn=0;cards=[];message='Draw a card to start.';msgColor='#E9FBF9';renderCards();updateHud()})
   });
 }
 
 /* ================= cardWager: pick a wager tier, reveal vs the dealer, 15 rounds ================= */
 function cardWager(id,cfg){
-  def(id,cfg.title,cfg.color,cfg.tagline,'Pick a wager — Low/Med/High — before the reveal · higher card wins the wager, lower loses it · 15 rounds',function(G){
-    var deck,score,round,message,msgColor;
+  def(id,cfg.title,cfg.color,cfg.tagline,'Pick a wager — Low/Med/High — before the reveal · higher card wins the wager, lower loses it · '+(cfg.rounds||15)+' rounds',function(G){
+    var deck,score,round,message,msgColor,ROUNDS=cfg.rounds||15;
     var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:400px;margin:0 auto;';G.el.appendChild(wrap);
     var cardsRow=document.createElement('div');cardsRow.style.cssText='display:flex;gap:16px;justify-content:center;min-height:70px;width:100%;align-items:center;';wrap.appendChild(cardsRow);
     var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
@@ -242,8 +242,8 @@ function cardWager(id,cfg){
     wrap.appendChild(btnRow);
     function cardFace(c,label){var red=c.s===1||c.s===2;return '<div style="text-align:center;"><div style="width:44px;height:62px;border-radius:7px;background:#f4f1ff;color:'+(red?'#d8434a':'#171233')+';display:flex;align-items:center;justify-content:center;font-weight:800;">'+E[c.r]+'</div><div style="font-size:.65rem;opacity:.6;margin-top:3px;">'+label+'</div></div>'}
     function renderCards(you,opp){cardsRow.innerHTML=(you?cardFace(you,'YOU'):'')+(opp?cardFace(opp,'DEALER'):'')}
-    function updateHud(){G.hud([['SCORE',padnum(score)],['ROUND',round+'/15']])}
-    function resolveRound(amt){if(round>=15)return;if(!deck||deck.length<2)deck=T();var you=deck.pop(),opp=deck.pop();renderCards(you,opp);round++;if(you.r===opp.r){message='Push — tie, wager returned.';msgColor='#9aa'}else if(you.r>opp.r){score+=amt;message='You win! +'+amt;msgColor='#3ddc97'}else{score=Math.max(0,score-amt);message='Dealer wins. -'+amt;msgColor='#ff6b4a'}updateHud();if(round>=15){G.later(function(){G.over(score,'15 rounds complete. Final score: '+score)},900)}}
+    function updateHud(){G.hud([['SCORE',padnum(score)],['ROUND',round+'/'+ROUNDS]])}
+    function resolveRound(amt){if(round>=ROUNDS)return;if(!deck||deck.length<2)deck=T();var you=deck.pop(),opp=deck.pop();renderCards(you,opp);round++;if(you.r===opp.r){message='Push — tie, wager returned.';msgColor='#9aa'}else if(you.r>opp.r){score+=amt;message='You win! +'+amt;msgColor='#3ddc97'}else{score=Math.max(0,score-amt);message='Dealer wins. -'+amt;msgColor='#ff6b4a'}updateHud();if(round>=ROUNDS){G.later(function(){G.over(score,ROUNDS+' rounds complete. Final score: '+score)},900)}}
     G.press=function(k){if('1'===k)resolveRound(10);else if('2'===k)resolveRound(25);else if('3'===k)resolveRound(50)};
     G.pad([['Low','1'],['Med','2'],['High','3']]);
     G.begin(function(){deck=T();score=0;round=0;message='Pick a wager to reveal.';msgColor='#E9FBF9';renderCards(null,null);updateHud()})

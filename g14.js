@@ -186,7 +186,7 @@ function dropConnect3d(id,cfg){
   });
 }
 dropConnect3d('skylineDrop',{title:'Skyline Drop',tagline:'Drop pieces down a city-grid shaft and line up four before the house does.',color:R.blue,cols:7,rows:6,winLen:4});
-dropConnect3d('coralDrop',{title:'Coral Drop',tagline:'Stack coral pegs in a reef column grid — four in a row wins the tide.',color:R.teal,cols:7,rows:6,winLen:4});
+dropConnect3d('coralDrop',{title:'Coral Drop',tagline:'Stack coral pegs in a wider reef column grid — four in a row wins the tide.',color:R.teal,cols:9,rows:6,winLen:4});
 dropConnect3d('emberDrop',{title:'Ember Drop',tagline:'Drop glowing embers down a forge grid, chain four to win the round.',color:R.coral,cols:6,rows:5,winLen:4});
 dropConnect3d('orchardDrop',{title:'Orchard Drop',tagline:'Drop seeds down tall rows and line up five to win the harvest — you only get 8 seconds a turn.',color:R.green,cols:8,rows:6,winLen:5,timed:!0});
 dropConnect3d('nebulaDrop',{title:'Nebula Drop',tagline:'Drop star-cores down a cosmic shaft — connect three on this compact grid, 8 seconds a turn.',color:R.violet,cols:5,rows:5,winLen:3,timed:!0});
@@ -303,7 +303,7 @@ function flipGrid3d(id,cfg){
   });
 }
 flipGrid3d('galaxyFlip',{title:'Galaxy Flip',tagline:'Outflank the house across a starfield grid — control the most discs when no moves remain.',color:R.violet,size:6});
-flipGrid3d('emeraldFlip',{title:'Emerald Flip',tagline:'Claim gem tiles by trapping the house between your stones.',color:R.green,size:6});
+flipGrid3d('emeraldFlip',{title:'Emerald Flip',tagline:'Claim gem tiles on a bigger board by trapping the house between your stones.',color:R.green,size:8});
 flipGrid3d('duneFlip',{title:'Dune Flip',tagline:'Flip dune tiles to your color and out-claim the house across the sands — 8 seconds a turn.',color:R.yellow,size:8,timed:!0});
 flipGrid3d('tidalFlip',{title:'Tidal Flip',tagline:'A bigger flipping board — out-maneuver the house across the whole tide pool, 8 seconds a turn.',color:R.blue,size:8,timed:!0});
 
