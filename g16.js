@@ -175,7 +175,7 @@ function aimTarget3d(id,cfg){
   });
 }
 aimTarget3d('cornerKick',{title:'Corner Kick',tagline:'Curl a corner kick into the goal — lock your aim, then your power, six tries to rack up points.',color:R.green,scoreMode:'target',idealPower:.55,perfectLabel:'Top corner! Goal!',goodLabel:'Goal!',missLabel:'Saved — off target.'});
-aimTarget3d('freeThrowHoop',{title:'Free Throw Hoop',tagline:'Line up the free throw and swish six shots in a row for a big score.',color:R.orange,scoreMode:'target',idealPower:.5,perfectLabel:'Nothing but net!',goodLabel:'Good shot!',missLabel:'Rimmed out.'});
+timingTap3d('freeThrowHoop',{title:'Free Throw Hoop',tagline:'Watch the marker sweep the meter and tap SHOOT the instant it hits the hot zone — six attempts.',color:R.orange,sweepSpeed:1.05,perfectLabel:'Nothing but net!',goodLabel:'Good shot!',missLabel:'Rimmed out.'});
 chargeRelease3d('archeryRange',{title:'Archery Range',tagline:'Steady your aim and draw the bow — chase a perfect bullseye over six arrows.',color:R.yellow,scoreMode:'target',idealPower:.5,perfectLabel:'Bullseye!',goodLabel:'Inner ring!',missLabel:'Outer ring.'});
 chargeRelease3d('horseshoePit',{title:'Horseshoe Pit',tagline:'Toss horseshoes at the stake — six throws, closest ringers win the most points.',color:R.coral,scoreMode:'target',idealPower:.6,perfectLabel:'Ringer!',goodLabel:'Close one!',missLabel:'Wide of the stake.'});
 chargeRelease3d('shotPutField',{title:'Shot Put Field',tagline:'Build up power and stay in the sector for the longest put across six attempts.',color:R.blue,scoreMode:'distance',maxDistance:22,unit:'m'});
@@ -271,7 +271,7 @@ function railSport3d(id,cfg){
   });
 }
 railSport3d('squashWall',{title:'Squash Wall',tagline:'Rally against the back wall solo — the ball speeds up with every return.',color:R.teal,vsAi:!1,startSpeed:3.4,maxSpeed:8});
-railSport3d('badmintonRally',{title:'Badminton Rally',tagline:'Trade volleys with the house across the net — first to 11 points wins the match.',color:R.magenta,vsAi:!0,startSpeed:3.2,maxSpeed:6.5,aiSpeed:3.6});
+volleyTiming3d('badmintonRally',{title:'Badminton Rally',tagline:'Tap LEFT / CENTER / RIGHT the instant the shuttle is in that zone to return it — first to 11 wins the match.',color:R.magenta,houseSkill:.6,startSpeed:.5});
 
 /* ================= chargeRelease3d: hold to charge power while steering aim live, release to shoot ================= */
 function chargeRelease3d(id,cfg){
@@ -341,6 +341,111 @@ function chargeRelease3d(id,cfg){
   });
 }
 
+/* ================= timingTap3d: a marker sweeps a meter, tap SHOOT to time it into the hot zone ================= */
+function timingTap3d(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Tap SHOOT (or SPACE) when the marker lines up with the glowing zone · 6 attempts',function(G){
+    var ROUNDS=6;
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var barWrap=document.createElement('div');barWrap.style.cssText='width:100%;height:28px;border-radius:14px;background:'+R.grid+';position:relative;overflow:hidden;';
+    var zoneDiv=document.createElement('div');zoneDiv.style.cssText='position:absolute;top:0;bottom:0;background:rgba(255,255,255,.22);border-radius:8px;';barWrap.appendChild(zoneDiv);
+    var marker=document.createElement('div');marker.style.cssText='position:absolute;top:0;bottom:0;width:4px;background:#fff;border-radius:2px;left:0%;';barWrap.appendChild(marker);
+    wrap.appendChild(barWrap);
+    var shootBtn=document.createElement('button');shootBtn.type='button';shootBtn.textContent='SHOOT';shootBtn.style.cssText='width:100%;padding:14px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;font-size:1rem;';wrap.appendChild(shootBtn);
+    var t,dir,round,total,ended,speed,zoneCenter,zoneHalf;
+    function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c||R.ink}
+    function updateHud(){G.hud([['ATTEMPT',round+'/'+ROUNDS],['SCORE',total]])}
+    function shoot(){
+      if(ended||shootBtn.disabled)return;
+      var dist=Math.abs(t-zoneCenter)/zoneHalf;
+      var res;
+      if(dist<=.35)res={pts:130,label:cfg.perfectLabel||'Perfect!',good:!0};
+      else if(dist<=1)res={pts:70,label:cfg.goodLabel||'Nice shot!',good:!0};
+      else res={pts:0,label:cfg.missLabel||'Off target.',good:!1};
+      shootBtn.disabled=!0;
+      total+=res.pts;updateHud();updateMsg(res.label+' +'+res.pts,res.good?R.green:R.coral);
+      G.later(nextRound,750);
+    }
+    shootBtn.addEventListener('pointerdown',shoot);
+    G.press=function(k){if(k===' ')shoot()};
+    function nextRound(){
+      if(round>=ROUNDS){G.over(total,'Final score: '+total+' over '+ROUNDS+' attempts');return}
+      round++;t=0;dir=1;shootBtn.disabled=!1;
+      speed=(cfg.sweepSpeed||1.1)+round*.06;
+      zoneHalf=.16;zoneCenter=.3+Math.random()*.4;
+      zoneDiv.style.left=((zoneCenter-zoneHalf)*100)+'%';zoneDiv.style.width=(zoneHalf*2*100)+'%';
+      updateMsg('Attempt '+round+' — time it!',cfg.color);updateHud();
+    }
+    function tick(dt){
+      if(ended||shootBtn.disabled)return;
+      t+=dir*speed*dt;
+      if(t>1){t=1;dir=-1}else if(t<0){t=0;dir=1}
+      marker.style.left=(t*100)+'%';
+    }
+    G.begin(function(){round=0;total=0;ended=!1;nextRound();G.frame(tick)})
+  });
+}
+
+/* ================= volleyTiming3d: pick a zone to time your swing as the shuttle sweeps across ================= */
+function volleyTiming3d(id,cfg){
+  def(id,cfg.title,cfg.color,cfg.tagline,'Tap LEFT / CENTER / RIGHT the instant the shuttle is in that zone to return it · first to 11',function(G){
+    var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;max-width:360px;margin:0 auto;';G.el.appendChild(wrap);
+    var msgDiv=document.createElement('div');msgDiv.style.cssText='min-height:1.4em;font-weight:700;text-align:center;';wrap.appendChild(msgDiv);
+    var barWrap=document.createElement('div');barWrap.style.cssText='width:100%;height:30px;border-radius:15px;background:'+R.grid+';position:relative;overflow:hidden;';
+    var z1=document.createElement('div');z1.style.cssText='position:absolute;left:0;top:0;bottom:0;width:33.33%;border-right:1px solid rgba(255,255,255,.15);';barWrap.appendChild(z1);
+    var z2=document.createElement('div');z2.style.cssText='position:absolute;left:33.33%;top:0;bottom:0;width:33.34%;border-right:1px solid rgba(255,255,255,.15);';barWrap.appendChild(z2);
+    var shuttle=document.createElement('div');shuttle.style.cssText='position:absolute;top:7px;bottom:7px;width:14px;border-radius:7px;background:#fff;left:0%;';barWrap.appendChild(shuttle);
+    wrap.appendChild(barWrap);
+    var row=document.createElement('div');row.style.cssText='display:flex;gap:8px;width:100%;';
+    var ZONES=['LEFT','CENTER','RIGHT'];
+    ZONES.forEach(function(z,i){var b=document.createElement('button');b.type='button';b.textContent=z;b.style.cssText='flex:1;padding:14px;border-radius:10px;border:none;background:'+cfg.color+';color:#171233;font-weight:800;cursor:pointer;';b.addEventListener('pointerdown',function(){trySwing(i)});row.appendChild(b)});
+    wrap.appendChild(row);
+    var pos,dir,speed,you,house,ended,resolved;
+    function updateMsg(s,c){msgDiv.textContent=s;msgDiv.style.color=c||R.ink}
+    function updateHud(){G.hud([['YOU',you],['HOUSE',house]])}
+    function zoneOf(p){return p<1/3?0:p<2/3?1:2}
+    function endGame(win){
+      ended=!0;
+      updateMsg(win?'You win the rally!':'House wins the rally.',win?R.green:R.coral);
+      G.later(function(){G.over(win?150+you*5:you*5,'Final: you '+you+' · house '+house,win?'You Win!':'Game Over')},700);
+    }
+    function endPoint(youWin){
+      resolved=!0;
+      if(youWin){you++;updateMsg('Point!',R.green)}else{house++;updateMsg('House point.',R.coral)}
+      updateHud();
+      if(you>=11){endGame(!0);return}
+      if(house>=11){endGame(!1);return}
+      G.later(nextVolley,600);
+    }
+    function trySwing(i){
+      if(ended||resolved)return;
+      var cz=zoneOf(pos);
+      if(cz===i){
+        resolved=!0;
+        var houseOk=Math.random()<(cfg.houseSkill||.58);
+        G.later(function(){
+          if(houseOk){resolved=!1;updateMsg('House returns it!',R.ink);G.later(nextVolley,350)}
+          else endPoint(!0);
+        },280);
+      } else {
+        endPoint(!1);
+      }
+    }
+    function nextVolley(){
+      if(ended)return;
+      pos=0;dir=1;resolved=!1;speed=(cfg.startSpeed||.5)+Math.min(you,house)*.03;
+      updateMsg('Watch the shuttle…',cfg.color);
+    }
+    function tick(dt){
+      if(ended||resolved)return;
+      pos+=dir*speed*dt;
+      if(pos>1){endPoint(!1);return}
+      shuttle.style.left=(pos*100)+'%';
+    }
+    G.press=function(k){if(k==='ArrowLeft')trySwing(0);else if(k==='ArrowRight')trySwing(2);else if(k===' '||k==='ArrowDown')trySwing(1)};
+    G.begin(function(){you=0;house=0;ended=!1;resolved=!1;nextVolley();G.frame(tick)})
+  });
+}
 
 }
 })();
