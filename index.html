@@ -10316,7 +10316,7 @@ function altitudeGlide3d(key,config){return mkCanvasRunner(key,config,altitudeGl
 
         obstacles.forEach(function(o) {
           ctx.fillStyle = o.type === "float" ? R.violet : R.coral;
-          L(ctx, o.x, o.y, o.w, o.h, 4).fill();
+          L(ctx, o.x, o.y, o.w, o.h, 4);ctx.fill();
         });
 
         ctx.fillStyle = R.yellow;
@@ -10338,7 +10338,7 @@ function altitudeGlide3d(key,config){return mkCanvasRunner(key,config,altitudeGl
         ctx.save();
         if (invuln > 0 && Math.floor(invuln / 100) % 2 === 0) ctx.globalAlpha = 0.4;
         ctx.fillStyle = R.ink;
-        L(ctx, player.x - player.w / 2, player.y - player.h, player.w, player.h, 6).fill();
+        L(ctx, player.x - player.w / 2, player.y - player.h, player.w, player.h, 6);ctx.fill();
         ctx.restore();
 
         ctx.textAlign = "center";
@@ -10802,7 +10802,7 @@ function altitudeGlide3d(key,config){return mkCanvasRunner(key,config,altitudeGl
           if (p.broken) return;
           ctx.globalAlpha = p.breaking ? Math.max(0.25, p.breakT / 260) : 1;
           ctx.fillStyle = p.type === "moving" ? R.violet : p.type === "breakable" ? R.coral : R.blue;
-          L(ctx, p.x, p.y, p.w, 10, 4).fill();
+          L(ctx, p.x, p.y, p.w, 10, 4);ctx.fill();
           ctx.globalAlpha = 1;
         });
 
@@ -11712,7 +11712,7 @@ function altitudeGlide3d(key,config){return mkCanvasRunner(key,config,altitudeGl
 
         zombies.forEach(function(z) {
           ctx.fillStyle = z.color;
-          L(ctx, z.x - z.r, z.y - z.r, z.r * 2, z.r * 2, 5).fill();
+          L(ctx, z.x - z.r, z.y - z.r, z.r * 2, z.r * 2, 5);ctx.fill();
           ctx.fillStyle = R.bg;
           ctx.fillRect(z.x - z.r, z.y - z.r - 6, z.r * 2, 4);
           ctx.fillStyle = R.green;
